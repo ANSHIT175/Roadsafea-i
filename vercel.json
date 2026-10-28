@@ -1,17 +1,8 @@
 {
-  "version": 2,
-  "functions": {
-    "api/index.py": {
-      "excludeFiles": "{testing/**,models/**,*.zip,*.md}"
-    }
-  },
+  "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
     {
       "source": "/api/(.*)",
-      "destination": "/api/index.py"
-    },
-    {
-      "source": "/health",
       "destination": "/api/index.py"
     },
     {
@@ -19,12 +10,8 @@
       "destination": "/api/index.py"
     },
     {
-      "source": "/",
-      "destination": "/frontend/index.html"
-    },
-    {
-      "source": "/(.*)",
-      "destination": "/frontend/$1"
+      "source": "/health",
+      "destination": "/api/index.py"
     }
   ]
 }

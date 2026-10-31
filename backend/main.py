@@ -497,10 +497,7 @@ def build_onnx_file_from_pt(pt_path: str, onnx_path: str) -> str:
 
 
 BASE_DIR = Path(__file__).resolve().parent
-MODEL_URL = os.environ.get(
-    "MODEL_URL",
-    "https://github.com/ANSHIT175/RoadSafei/releases/download/v1.0/best.pt",
-)
+MODEL_URL = os.environ.get("MODEL_URL", "").strip()
 ONNX_CACHE_PATH = "/tmp/roadsafe_o2o.onnx"
 
 CANDIDATE_MODEL_PATHS = [
@@ -516,11 +513,19 @@ def ensure_model() -> str:
     for path in CANDIDATE_MODEL_PATHS:
         if path.exists() and path.stat().st_size > 1_000_000:
             return str(path)
+
+    if not MODEL_URL:
+        expected = ", ".join(str(p) for p in CANDIDATE_MODEL_PATHS[:3])
+        raise FileNotFoundError(
+            "RoadSafe AI model weights are missing. Include models/best.pt in the deployment. "
+            f"Checked: {expected}"
+        )
+
     target = Path("/tmp/best.pt")
     target.parent.mkdir(parents=True, exist_ok=True)
     req = urllib.request.Request(
         MODEL_URL,
-        headers={"User-Agent": "RoadSafeAI-Backend/2.2"},
+        headers={"User-Agent": "RoadSafeAI-Backend/2.3"},
     )
     with urllib.request.urlopen(req, timeout=120) as resp, open(target, "wb") as f:
         while True:
@@ -528,6 +533,9 @@ def ensure_model() -> str:
             if not chunk:
                 break
             f.write(chunk)
+    if target.stat().st_size <= 1_000_000:
+        target.unlink(missing_ok=True)
+        raise RuntimeError("The downloaded model file is missing or too small to be a valid checkpoint.")
     return str(target)
 
 
@@ -605,24 +613,34 @@ def letterbox_image(im: Image.Image, new_shape: int = 640):
     return np.ascontiguousarray(arr), r, (left, top)
 
 
-def nms_boxes(boxes: np.ndarray, scores: np.ndarray, iou_thresh: float = 0.45):
+def nms_boxes(boxes: np.ndarray, scores: np.ndarray, iou_thresh: float = 0.35):
+    """Greedy NMS with an extra containment check for nested duplicate boxes."""
     if len(boxes) == 0:
         return []
+    boxes = np.asarray(boxes, dtype=np.float32)
+    scores = np.asarray(scores, dtype=np.float32)
     x1, y1, x2, y2 = boxes[:, 0], boxes[:, 1], boxes[:, 2], boxes[:, 3]
     areas = np.maximum(0.0, x2 - x1) * np.maximum(0.0, y2 - y1)
     order = scores.argsort()[::-1]
     keep = []
     while order.size > 0:
-        i = order[0]
-        keep.append(int(i))
-        xx1 = np.maximum(x1[i], x1[order[1:]])
-        yy1 = np.maximum(y1[i], y1[order[1:]])
-        xx2 = np.minimum(x2[i], x2[order[1:]])
-        yy2 = np.minimum(y2[i], y2[order[1:]])
+        i = int(order[0])
+        keep.append(i)
+        rest = order[1:]
+        if rest.size == 0:
+            break
+        xx1 = np.maximum(x1[i], x1[rest])
+        yy1 = np.maximum(y1[i], y1[rest])
+        xx2 = np.minimum(x2[i], x2[rest])
+        yy2 = np.minimum(y2[i], y2[rest])
         inter = np.maximum(0.0, xx2 - xx1) * np.maximum(0.0, yy2 - yy1)
-        ovr = inter / (areas[i] + areas[order[1:]] - inter + 1e-6)
-        inds = np.where(ovr <= iou_thresh)[0]
-        order = order[inds + 1]
+        union = areas[i] + areas[rest] - inter + 1e-6
+        iou = inter / union
+        smaller_area = np.minimum(areas[i], areas[rest]) + 1e-6
+        containment = inter / smaller_area
+        # The containment test catches a small duplicate box nested inside a wider box.
+        suppress = (iou > iou_thresh) | (containment > 0.88)
+        order = rest[~suppress]
     return keep
 
 
@@ -697,8 +715,38 @@ def raw_infer_crop(sess: ort.InferenceSession, im: Image.Image, crop_box, min_co
     boxes_arr = np.array(boxes, dtype=np.float32)
     scores_arr = np.array(scores, dtype=np.float32)
     cids_arr = np.array(cids, dtype=np.int32)
-    keep = nms_boxes(boxes_arr, scores_arr, 0.45)
+    keep = nms_boxes(boxes_arr, scores_arr, 0.35)
     return [(NAMES[int(cids_arr[k])], float(scores_arr[k]), boxes_arr[k].tolist()) for k in keep]
+
+
+def calculate_risk_score(detections, width: int, height: int) -> int:
+    """Explainable 0-100 risk score with diminishing returns for extra hazards."""
+    if not detections:
+        return 0
+    base_weights = {
+        "Pothole (D40)": 55.0,
+        "Alligator Crack (D20)": 52.0,
+        "Longitudinal Crack (D00)": 38.0,
+        "Transverse Crack (D10)": 36.0,
+        "Other Corruption (Class 1)": 30.0,
+    }
+    contributions = []
+    image_area = float(max(1, width * height))
+    for detection in detections:
+        weight = base_weights.get(detection["class"], 30.0)
+        confidence = max(0.0, min(1.0, float(detection["confidence"]) / 100.0))
+        confidence_factor = 0.60 + 0.40 * confidence
+        x1, y1, x2, y2 = detection["box"]
+        box_area = max(0.0, x2 - x1) * max(0.0, y2 - y1)
+        area_ratio = box_area / image_area
+        size_bonus = min(15.0, area_ratio * 100.0)
+        contributions.append(weight * confidence_factor + size_bonus)
+
+    contributions.sort(reverse=True)
+    primary = contributions[0]
+    secondary = sum(0.18 * value for value in contributions[1:])
+    multi_hazard_bonus = min(8.0, max(0.0, (len(contributions) - 1) * 2.5))
+    return int(round(min(100.0, primary + secondary + multi_hazard_bonus)))
 
 
 def run_validated_inference(im: Image.Image) -> dict:
@@ -707,7 +755,7 @@ def run_validated_inference(im: Image.Image) -> dict:
     im_arr = np.asarray(im)
 
     # Conservative per-class confidence thresholds for best.pt
-    min_conf = {"Pothole": 0.25, "crack": 0.25, "other corruption": 0.32}
+    min_conf = {"Pothole": 0.38, "crack": 0.36, "other corruption": 0.45}
     candidates = raw_infer_crop(sess, im, (0, 0, W, H), min_conf)
 
     # Spatial & geometric validation
@@ -756,7 +804,7 @@ def run_validated_inference(im: Image.Image) -> dict:
     if len(valid) > 1:
         b_arr = np.array([v[2] for v in valid], dtype=np.float32)
         s_arr = np.array([v[1] for v in valid], dtype=np.float32)
-        keep = nms_boxes(b_arr, s_arr, 0.45)
+        keep = nms_boxes(b_arr, s_arr, 0.35)
         valid = [valid[k] for k in keep]
 
     detections = []
@@ -781,27 +829,7 @@ def run_validated_inference(im: Image.Image) -> dict:
             "recommendation": "No significant road damage detected. Road surface is in normal serviceable condition; continue routine patrol monitoring.",
         }
 
-    base_weights = {
-        "Pothole (D40)": 74.0,
-        "Alligator Crack (D20)": 68.0,
-        "Longitudinal Crack (D00)": 64.0,
-        "Transverse Crack (D10)": 60.0,
-        "Other Corruption (Class 1)": 44.0,
-    }
-    contributions = []
-    for d in detections:
-        w = base_weights.get(d["class"], 50.0)
-        c_factor = 0.55 + 0.45 * (d["confidence"] / 100.0)
-        bx = d["box"]
-        area_r = ((bx[2] - bx[0]) * (bx[3] - bx[1])) / float(W * H)
-        size_bonus = min(14.0, area_r * 45.0)
-        contributions.append(w * c_factor + size_bonus)
-
-    contributions.sort(reverse=True)
-    primary = contributions[0]
-    secondary = sum(0.38 * c for c in contributions[1:])
-    multi_hazard_bonus = 8.0 if len(detections) >= 3 else (4.0 if len(detections) == 2 else 0.0)
-    risk = int(round(min(98.0, max(35.0, primary + secondary + multi_hazard_bonus))))
+    risk = calculate_risk_score(detections, W, H)
 
     severity = (
         "Critical"
@@ -831,9 +859,12 @@ def run_validated_inference(im: Image.Image) -> dict:
 @app.get("/health")
 @app.get("/api/health")
 def health():
+    model_path = next((p for p in CANDIDATE_MODEL_PATHS if p.exists() and p.stat().st_size > 1_000_000), None)
+    model_available = model_path is not None or bool(MODEL_URL)
     return {
-        "status": "online",
+        "status": "online" if model_available else "model_missing",
         "model": "RDD2022 best.pt (YOLO26m ONNXRuntime)",
+        "model_available": model_available,
         "model_loaded": _ORT_SESSION is not None,
         "trained_classes": NAMES,
         "clean_road_gate": "enabled",

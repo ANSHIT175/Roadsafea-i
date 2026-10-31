@@ -415,16 +415,16 @@ html,body{margin:0;padding:0;width:100%;overflow-x:hidden;background:radial-grad
 // ---------------------------------------------------------------------------
 // Exact trained model.names inside best.pt: {0: 'crack', 1: 'other corruption', 2: 'Pothole'}
 const WEIGHTS = {
-  "Pothole (D40)": 74,
-  "Pothole": 74,
-  "Alligator Crack (D20)": 68,
-  "Alligator Crack": 68,
-  "Longitudinal Crack (D00)": 64,
-  "Longitudinal Crack": 64,
-  "Road Crack": 62,
-  "Transverse Crack (D10)": 60,
-  "Transverse Crack": 60,
-  "Other Corruption (Class 1)": 44
+  "Pothole (D40)": 55,
+  "Pothole": 55,
+  "Alligator Crack (D20)": 52,
+  "Alligator Crack": 52,
+  "Longitudinal Crack (D00)": 38,
+  "Longitudinal Crack": 38,
+  "Road Crack": 37,
+  "Transverse Crack (D10)": 36,
+  "Transverse Crack": 36,
+  "Other Corruption (Class 1)": 30
 };
 
 const RECOMMENDATIONS = {
@@ -510,22 +510,23 @@ const SAMPLES = [
 ];
 
 function computeRiskScore(detections, imgW, imgH) {
-  // CLEAN-ROAD GATE: Zero validated detections MUST always return 0 Risk (Low / Safe)
   if (!detections || detections.length === 0) return 0;
   const W = imgW || 1280;
   const H = imgH || 720;
-  const contribs = detections.map(d => {
-    const w = WEIGHTS[d.class] || 50;
-    const cFactor = 0.55 + 0.45 * ((d.confidence || 50) / 100.0);
-    const bx = d.box || [0, 0, 100, 100];
-    const areaR = Math.max(0, (bx[2] - bx[0]) * (bx[3] - bx[1])) / Math.max(1, W * H);
-    const sizeBonus = Math.min(14, areaR * 45);
-    return w * cFactor + sizeBonus;
+  const contributions = detections.map(d => {
+    const weight = WEIGHTS[d.class] || 30;
+    const confidence = Math.max(0, Math.min(1, Number(d.confidence || 0) / 100));
+    const confidenceFactor = 0.60 + 0.40 * confidence;
+    const box = d.box || [0, 0, 0, 0];
+    const area = Math.max(0, box[2] - box[0]) * Math.max(0, box[3] - box[1]);
+    const areaRatio = area / Math.max(1, W * H);
+    const sizeBonus = Math.min(15, areaRatio * 100);
+    return weight * confidenceFactor + sizeBonus;
   }).sort((a, b) => b - a);
-  const primary = contribs[0] || 0;
-  const secondary = contribs.slice(1).reduce((s, c) => s + 0.38 * c, 0);
-  const multiBonus = detections.length >= 3 ? 8 : (detections.length === 2 ? 4 : 0);
-  return Math.min(98, Math.max(35, Math.round(primary + secondary + multiBonus)));
+  const primary = contributions[0] || 0;
+  const secondary = contributions.slice(1).reduce((sum, value) => sum + 0.18 * value, 0);
+  const multiBonus = Math.min(8, Math.max(0, (contributions.length - 1) * 2.5));
+  return Math.min(100, Math.round(primary + secondary + multiBonus));
 }
 
 function getSeverity(risk) {
@@ -617,14 +618,19 @@ async function checkBackendStatus() {
   for (const ep of ["/api/health", "/health"]) {
     try {
       const d = await safeFetchJSON(ep, { method: "GET" });
-      if (d && d.status) {
+      if (d && d.status === "online" && d.model_available !== false) {
         statusEl.textContent = "● RDD2022 FastAPI Online";
-        toast("Connected to live FastAPI backend (" + (d.model || "best.pt") + ")");
+        toast("Connected to live AI model (" + (d.model || "best.pt") + ")");
+        return;
+      }
+      if (d && d.status === "model_missing") {
+        statusEl.textContent = "● AI model missing — deployment incomplete";
+        toast("AI model weights are missing from the server.");
         return;
       }
     } catch (_) {}
   }
-  statusEl.textContent = "● RDD2022 AI Ready (Edge + YOLO)";
+  statusEl.textContent = "● AI Backend Offline — live analysis unavailable";
 }
 
 // ---------------------------------------------------------------------------
@@ -686,105 +692,7 @@ function demo() {
   analyze();
 }
 
-// Offline Fallback Analyzer with strict Road-Surface Trapezoid ROI + Clean-Road Gate
-function analyzeRoadCanvasPixels(imgEl) {
-  const natW = imgEl.naturalWidth || imgEl.width || 640;
-  const natH = imgEl.naturalHeight || imgEl.height || 480;
-  const workW = 320;
-  const workH = 210;
-
-  const c = document.createElement("canvas");
-  c.width = workW;
-  c.height = workH;
-  const ctx = c.getContext("2d");
-  ctx.drawImage(imgEl, 0, 0, workW, workH);
-  const imgData = ctx.getImageData(0, 0, workW, workH).data;
-
-  const gray = new Float32Array(workW * workH);
-  for (let i = 0, p = 0; i < imgData.length; i += 4, p++) {
-    gray[p] = 0.299 * imgData[i] + 0.587 * imgData[i + 1] + 0.114 * imgData[i + 2];
-  }
-
-  // Strictly restrict analysis to the central drivable road surface (y: 36%..84%, x: 26%..74%),
-  // completely excluding sky/horizon, vehicle dashboard, and left/right guardrails & trees.
-  const y0 = Math.floor(workH * 0.36);
-  const y1 = Math.floor(workH * 0.84);
-  const x0 = Math.floor(workW * 0.26);
-  const x1 = Math.floor(workW * 0.74);
-
-  const roiVals = [];
-  for (let y = y0; y < y1; y++) {
-    for (let x = x0; x < x1; x++) {
-      roiVals.push(gray[y * workW + x]);
-    }
-  }
-  roiVals.sort((a, b) => a - b);
-  const roadMedian = roiVals[Math.floor(roiVals.length / 2)] || 110;
-
-  const rows = 4, cols = 6;
-  const ch = Math.floor((y1 - y0) / rows);
-  const cw = Math.floor((x1 - x0) / cols);
-  const scaleX = natW / workW;
-  const scaleY = natH / workH;
-  const detections = [];
-
-  for (let r = 0; r < rows; r++) {
-    for (let cl = 0; cl < cols; cl++) {
-      const cy0 = y0 + r * ch;
-      const cy1 = y0 + (r + 1) * ch;
-      const cx0 = x0 + cl * cw;
-      const cx1 = x0 + (cl + 1) * cw;
-
-      let sumR = 0, sumG = 0, sumB = 0, brightCnt = 0, darkCavity = 0, sharpCrack = 0, n = 0;
-      for (let y = cy0 + 1; y < cy1 - 1; y++) {
-        for (let x = cx0 + 1; x < cx1 - 1; x++) {
-          const idx = y * workW + x;
-          const p4 = idx * 4;
-          sumR += imgData[p4];
-          sumG += imgData[p4 + 1];
-          sumB += imgData[p4 + 2];
-          const v = gray[idx];
-          if (v > roadMedian * 1.16) brightCnt++;
-          const gx = Math.abs(gray[idx + 1] - gray[idx - 1]);
-          const gy = Math.abs(gray[idx + workW] - gray[idx - workW]);
-          const grad = gx + gy;
-          if (v < roadMedian * 0.52) darkCavity++;
-          if (grad > 52 && v < roadMedian * 0.68) sharpCrack++;
-          n++;
-        }
-      }
-      if (n === 0) continue;
-      const meanR = sumR / n, meanG = sumG / n, meanB = sumB / n;
-      // Ignore green vegetation/foliage and painted white/yellow lane stripes
-      if (meanG > meanR + 8 && meanG > meanB + 8) continue;
-      if (brightCnt / n > 0.06) continue;
-
-      const darkRatio = darkCavity / n;
-      const crackRatio = sharpCrack / n;
-      const score = darkRatio * 100 + crackRatio * 180;
-
-      // Conservative Clean-Road Gate: only emit a detection when genuine severe cavity/fracture exists
-      if (score >= 42 && (darkRatio > 0.16 || crackRatio > 0.09)) {
-        const isPothole = darkRatio > 0.22;
-        detections.push({
-          class: isPothole ? "Pothole (D40)" : "Longitudinal Crack (D00)",
-          raw_class: isPothole ? "Pothole" : "crack",
-          confidence: Math.min(89.5, Math.round((45 + score * 0.45) * 10) / 10),
-          box: [
-            Math.round(Math.max(0, cx0 - cw * 0.3) * scaleX),
-            Math.round(Math.max(0, cy0 - ch * 0.3) * scaleY),
-            Math.round(Math.min(workW, cx1 + cw * 0.3) * scaleX),
-            Math.round(Math.min(workH, cy1 + ch * 0.3) * scaleY)
-          ]
-        });
-      }
-    }
-  }
-
-  // CLEAN-ROAD GATE: Do NOT fabricate detections when detections.length === 0!
-  return { width: natW, height: natH, detections: detections.slice(0, 3) };
-}
-
+// All uploaded and bundled sample images are analysed by the server-side trained model.
 async function analyze() {
   if (!uploadedDataUrl && selectedSampleIdx < 0) {
     selectSample(0);
@@ -802,90 +710,75 @@ async function analyze() {
     progress.textContent = txt;
   };
 
-  setStep(1, "01/04 Preprocessing image (640×640 RGB letterbox)…");
-  await new Promise(r => setTimeout(r, 150));
-  setStep(2, "02/04 Running real best.pt (YOLO26m) inference + NMS & Clean-Road Gate…");
+  let imageFile = uploadedFileObj;
+  let lastApiError = "AI backend did not return a valid analysis.";
 
+  // Built-in sample cards are embedded in the page; convert the selected sample
+  // to a File so it is sent through the exact same real model inference path.
+  if (!imageFile) {
+    try {
+      const imageUrl = uploadedDataUrl || document.getElementById("img").src;
+      if (!imageUrl) throw new Error("Select a road image first.");
+      const imageResponse = await fetch(imageUrl);
+      if (!imageResponse.ok) throw new Error("Could not read the selected sample image.");
+      const imageBlob = await imageResponse.blob();
+      const sampleName = selectedSampleIdx >= 0 && SAMPLES[selectedSampleIdx]
+        ? SAMPLES[selectedSampleIdx].name
+        : "road-sample.jpg";
+      imageFile = new File([imageBlob], sampleName, { type: imageBlob.type || "image/jpeg" });
+    } catch (err) {
+      pipeline.style.display = "none";
+      toast(err.message || "Could not prepare the image for analysis.");
+      return;
+    }
+  }
+
+  setStep(1, "01/04 Preparing image for model inference…");
   let resultData = null;
-
-  // 1. Always query live FastAPI backend (/analyze) first when an uploaded file is present.
-  // CRITICAL FIX: Accept apiRes even when apiRes.detections.length === 0 (Clean Road Gate!).
-  if (uploadedFileObj) {
-    for (const ep of ["/api/analyze", "/analyze"]) {
-      try {
-        const fd = new FormData();
-        fd.append("file", uploadedFileObj);
-        const apiRes = await safeFetchJSON(ep, { method: "POST", body: fd });
-        if (apiRes && Array.isArray(apiRes.detections)) {
-          resultData = {
-            analysis_id: "RS-" + (apiRes.analysis_id || Math.floor(1030 + Math.random() * 8900)).toString().toUpperCase().slice(0, 4),
-            timestamp: new Date().toISOString().slice(0, 19).replace("T", " "),
-            location: "Uploaded Road Segment (" + uploadedFileObj.name + ")",
-            image_size: apiRes.image_size || { width: 1280, height: 720 },
-            risk_score: typeof apiRes.risk_score === "number" ? apiRes.risk_score : computeRiskScore(apiRes.detections),
-            severity: apiRes.severity || getSeverity(apiRes.risk_score || 0),
-            status_message: apiRes.status_message || (apiRes.detections.length === 0 ? "No significant road damage detected" : apiRes.detections.length + " validated hazard(s) detected"),
-            detections: apiRes.detections,
-            recommendation: apiRes.recommendation || RECOMMENDATIONS[apiRes.severity || "Low"],
-            imgSrc: uploadedDataUrl,
-            latLng: { left: Math.floor(20 + Math.random() * 60), top: Math.floor(22 + Math.random() * 52) }
-          };
-          break;
-        }
-      } catch (_) {
-        // Backend offline (e.g. static Canvas preview); use Clean-Road-Gated fallback below
+  for (const ep of ["/api/analyze", "/analyze"]) {
+    try {
+      setStep(2, "02/04 Running trained RDD2022 model + duplicate suppression…");
+      const fd = new FormData();
+      fd.append("file", imageFile);
+      const apiRes = await safeFetchJSON(ep, { method: "POST", body: fd });
+      if (!apiRes || !Array.isArray(apiRes.detections) || typeof apiRes.risk_score !== "number") {
+        throw new Error("The AI server returned an incomplete analysis response.");
       }
+      const riskScore = Math.max(0, Math.min(100, Math.round(apiRes.risk_score)));
+      resultData = {
+        analysis_id: "RS-" + String(apiRes.analysis_id || Date.now()).slice(0, 8).toUpperCase(),
+        timestamp: apiRes.timestamp || new Date().toISOString().slice(0, 19).replace("T", " "),
+        location: "Field Upload • " + imageFile.name,
+        image_size: apiRes.image_size || { width: 0, height: 0 },
+        risk_score: riskScore,
+        severity: apiRes.severity || getSeverity(riskScore),
+        status_message: apiRes.status_message || (apiRes.detections.length === 0
+          ? "No road damage detected by the model"
+          : apiRes.detections.length + " model detection(s) returned"),
+        detections: apiRes.detections,
+        recommendation: apiRes.recommendation || RECOMMENDATIONS[apiRes.severity || getSeverity(riskScore)],
+        imgSrc: uploadedDataUrl,
+        latLng: selectedSampleIdx >= 0 && SAMPLES[selectedSampleIdx]
+          ? { ...SAMPLES[selectedSampleIdx].latLng }
+          : { left: 50, top: 50 }
+      };
+      break;
+    } catch (err) {
+      lastApiError = err && err.message ? err.message : String(err);
     }
   }
 
-  await new Promise(r => setTimeout(r, 180));
-  setStep(3, "03/04 Applying Clean-Road Gate & validated risk scoring…");
-
-  // 2. If sample selected or running in offline Canvas preview without FastAPI server
   if (!resultData) {
-    if (selectedSampleIdx >= 0 && SAMPLES[selectedSampleIdx]) {
-      const s = SAMPLES[selectedSampleIdx];
-      const risk = computeRiskScore(s.detections, s.width, s.height);
-      const sev = getSeverity(risk);
-      resultData = {
-        analysis_id: "RS-" + Math.floor(1026 + Math.random() * 890),
-        timestamp: new Date().toISOString().slice(0, 19).replace("T", " "),
-        location: s.title + " (" + s.name + ")",
-        image_size: { width: s.width, height: s.height },
-        risk_score: risk,
-        severity: sev,
-        status_message: s.detections.length === 0 ? "No significant road damage detected" : s.detections.length + " validated road hazard(s) detected",
-        detections: s.detections.map(d => ({ ...d, box: [...d.box] })),
-        recommendation: RECOMMENDATIONS[sev],
-        imgSrc: uploadedDataUrl,
-        latLng: { left: s.latLng.left, top: s.latLng.top }
-      };
-    } else {
-      const imgEl = document.getElementById("img");
-      const cvOut = analyzeRoadCanvasPixels(imgEl);
-      const risk = computeRiskScore(cvOut.detections, cvOut.width, cvOut.height);
-      const sev = getSeverity(risk);
-      const fname = uploadedFileObj ? uploadedFileObj.name : "Custom Road Image";
-      resultData = {
-        analysis_id: "RS-" + Math.floor(1030 + Math.random() * 890),
-        timestamp: new Date().toISOString().slice(0, 19).replace("T", " "),
-        location: "Field Upload • " + fname,
-        image_size: { width: cvOut.width, height: cvOut.height },
-        risk_score: risk,
-        severity: sev,
-        status_message: cvOut.detections.length === 0 ? "No significant road damage detected" : cvOut.detections.length + " validated road hazard(s) detected",
-        detections: cvOut.detections,
-        recommendation: RECOMMENDATIONS[sev],
-        imgSrc: uploadedDataUrl,
-        latLng: { left: Math.floor(22 + Math.random() * 58), top: Math.floor(25 + Math.random() * 50) }
-      };
-    }
+    setStep(0, "✕ Live AI analysis unavailable — no fallback result was generated.");
+    toast("AI analysis failed: " + lastApiError + ". Start/check the backend and retry.");
+    return;
   }
 
-  await new Promise(r => setTimeout(r, 150));
+  setStep(3, "03/04 Calculating severity from validated model detections…");
+  await new Promise(r => setTimeout(r, 100));
   setStep(4, resultData.detections.length === 0
-    ? "✓ Clean-Road Gate: No significant road damage detected (Safe / Low Risk)."
-    : "✓ Validated best.pt inference & risk assessment completed.");
+    ? "✓ Model returned no detections for this image."
+    : "✓ Live model inference and risk assessment completed.");
 
   currentResult = resultData;
   selectedZoneId = resultData.analysis_id;
@@ -897,9 +790,9 @@ async function analyze() {
   showBoundingBoxes = true;
   page("result");
   if (resultData.detections.length === 0) {
-    toast("No significant road damage detected — Risk 0/100 (Low / Safe)");
+    toast("Model detected no road damage — Risk 0/100 (Low)");
   } else {
-    toast("Analysis complete: Risk " + resultData.risk_score + "/100 (" + resultData.severity + ")");
+    toast("Live AI analysis complete: Risk " + resultData.risk_score + "/100 (" + resultData.severity + ")");
   }
 }
 

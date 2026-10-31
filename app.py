@@ -500,7 +500,8 @@ def build_onnx_file_from_pt(pt_path: str, onnx_path: str) -> str:
 
 
 BASE_DIR = Path(__file__).resolve().parent
-MODEL_URL = os.environ.get("MODEL_URL", "").strip()
+DEFAULT_MODEL_URL = "https://github.com/ANSHIT175/Roadsafea-i/releases/download/v1.0.0/best.pt"
+MODEL_URL = os.environ.get("MODEL_URL", DEFAULT_MODEL_URL).strip()
 ONNX_CACHE_PATH = "/tmp/roadsafe_o2o.onnx"
 
 CANDIDATE_MODEL_PATHS = [
@@ -512,34 +513,69 @@ CANDIDATE_MODEL_PATHS = [
 ]
 
 
+def _is_valid_pt_checkpoint(path: Path) -> bool:
+    """Check that the downloaded file is the expected PyTorch ZIP checkpoint."""
+    try:
+        if not path.is_file() or path.stat().st_size <= 1_000_000:
+            return False
+        with zipfile.ZipFile(path, "r") as checkpoint:
+            names = set(checkpoint.namelist())
+            return "best/data.pkl" in names and any(n.startswith("best/data/") for n in names)
+    except (OSError, zipfile.BadZipFile, RuntimeError):
+        return False
+
+
 def ensure_model() -> str:
+    # Prefer a local model when running in VS Code. Vercel deployments exclude
+    # models/** and therefore fall through to the public GitHub Release asset.
     for path in CANDIDATE_MODEL_PATHS:
-        if path.exists() and path.stat().st_size > 1_000_000:
+        if _is_valid_pt_checkpoint(path):
             return str(path)
 
     if not MODEL_URL:
-        expected = ", ".join(str(p) for p in CANDIDATE_MODEL_PATHS[:3])
         raise FileNotFoundError(
-            "RoadSafe AI model weights are missing. Include models/best.pt in the deployment. "
-            f"Checked: {expected}"
+            "RoadSafe AI model weights are missing and MODEL_URL is not configured. "
+            "Set MODEL_URL to the public GitHub Release asset URL."
         )
 
     target = Path("/tmp/best.pt")
+    temp_target = Path("/tmp/best.pt.download")
     target.parent.mkdir(parents=True, exist_ok=True)
     req = urllib.request.Request(
         MODEL_URL,
-        headers={"User-Agent": "RoadSafeAI-Backend/2.3"},
+        headers={"User-Agent": "RoadSafeAI-Backend/2.4", "Accept": "application/octet-stream"},
     )
-    with urllib.request.urlopen(req, timeout=120) as resp, open(target, "wb") as f:
-        while True:
-            chunk = resp.read(1024 * 1024)
-            if not chunk:
-                break
-            f.write(chunk)
-    if target.stat().st_size <= 1_000_000:
-        target.unlink(missing_ok=True)
-        raise RuntimeError("The downloaded model file is missing or too small to be a valid checkpoint.")
-    return str(target)
+
+    try:
+        with urllib.request.urlopen(req, timeout=180) as resp, open(temp_target, "wb") as f:
+            content_length = resp.headers.get("Content-Length")
+            expected_size = int(content_length) if content_length and content_length.isdigit() else None
+            downloaded = 0
+            while True:
+                chunk = resp.read(1024 * 1024)
+                if not chunk:
+                    break
+                f.write(chunk)
+                downloaded += len(chunk)
+            f.flush()
+            os.fsync(f.fileno())
+        if expected_size is not None and downloaded != expected_size:
+            raise RuntimeError(
+                f"Model download was incomplete ({downloaded} of {expected_size} bytes)."
+            )
+        if not _is_valid_pt_checkpoint(temp_target):
+            raise RuntimeError(
+                "GitHub Release download did not contain a valid best.pt checkpoint. "
+                "Check the Release asset name and URL."
+            )
+        os.replace(temp_target, target)
+        return str(target)
+    except Exception:
+        try:
+            temp_target.unlink(missing_ok=True)
+        except OSError:
+            pass
+        raise
 
 
 _SESSION_LOCK = threading.Lock()
@@ -884,6 +920,7 @@ def health():
         "status": "online" if model_available else "model_missing",
         "model": "RDD2022 best.pt (YOLO26m ONNXRuntime)",
         "model_available": model_available,
+        "model_source": "GitHub Release asset" if MODEL_URL else "local checkpoint",
         "model_loaded": _ORT_SESSION is not None,
         "trained_classes": NAMES,
         "clean_road_gate": "enabled",

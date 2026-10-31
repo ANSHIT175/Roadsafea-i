@@ -2,8 +2,7 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "functions": {
     "api/index.py": {
-      "includeFiles": "models/best.pt",
-      "excludeFiles": "{testing/**,backend/**,**/__pycache__/**,**/*.pyc,*.zip}",
+      "excludeFiles": "{testing/**,backend/**,models/**,**/__pycache__/**,**/*.pyc,*.zip,README.md}",
       "maxDuration": 60
     }
   },

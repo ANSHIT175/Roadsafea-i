@@ -1,12 +1,5 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "functions": {
-    "api/index.py": {
-      "includeFiles": "models/best.pt",
-      "excludeFiles": "{testing/**,backend/**,**/__pycache__/**,**/*.pyc,*.zip}",
-      "maxDuration": 60
-    }
-  },
   "rewrites": [
     {
       "source": "/api/(.*)",

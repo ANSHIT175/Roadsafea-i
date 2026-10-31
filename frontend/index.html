@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=5">
-<title>RoadSafe AI Pro | Road Damage Intelligence</title>
+<title>RoadSafe AI | Road Damage Detection</title>
 <style>
 :root{
   --bg:#060d17;
@@ -19,11 +19,11 @@
   --yellow:#ffd166;
 }
 *{box-sizing:border-box}
-html,body{margin:0;padding:0;width:100%;overflow-x:hidden;background:radial-gradient(circle at 25% 0,#122944 0,#060d17 42%);color:var(--text);font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+html,body{margin:0;padding:0;width:100%;overflow-x:hidden;background:#08111c;color:var(--text);font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
 .app-shell{display:flex;min-height:100vh;width:100%}
 .side{width:245px;position:fixed;inset:0 auto 0 0;background:#07101b;border-right:1px solid var(--line);padding:20px 13px;z-index:40;display:flex;flex-direction:column;justify-content:space-between}
 .brand{display:flex;gap:10px;align-items:center;font-size:20px;font-weight:900;padding:10px}
-.logo{width:35px;height:35px;border-radius:11px;background:linear-gradient(135deg,var(--green),var(--blue));display:grid;place-items:center;color:#061018;font-weight:900;flex-shrink:0}
+.logo{width:35px;height:35px;border-radius:11px;background:var(--green);display:grid;place-items:center;color:#061018;font-weight:900;flex-shrink:0}
 .nav{margin-top:20px;display:grid;gap:6px}
 .nav button{border:0;background:transparent;color:var(--muted);text-align:left;padding:12px 14px;border-radius:10px;cursor:pointer;font-size:14px;font-weight:600;display:flex;align-items:center;gap:10px;transition:all .18s ease}
 .nav button:hover,.nav button.on{background:#11243a;color:#fff;box-shadow:inset 3px 0 0 var(--green)}
@@ -37,7 +37,7 @@ html,body{margin:0;padding:0;width:100%;overflow-x:hidden;background:radial-grad
 .page{display:none;animation:fadeIn .2s ease}
 .page.on{display:block}
 @keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
-.hero,.card{background:linear-gradient(180deg,#0e1c2d,#0a1625);border:1px solid var(--line);border-radius:17px;padding:20px;margin-top:16px;max-width:100%}
+.hero,.card{background:#0d1927;border:1px solid var(--line);border-radius:13px;padding:20px;margin-top:16px;max-width:100%}
 .hero{padding:24px}
 .hero h2{font-size:clamp(20px,2.8vw,27px);margin:6px 0}
 .grid{display:grid;gap:15px}
@@ -133,37 +133,37 @@ html,body{margin:0;padding:0;width:100%;overflow-x:hidden;background:radial-grad
   <main class="main">
     <header class="top">
       <div>
-        <div class="eyebrow">RDD2022 • COMPUTER VISION • ROAD OPERATIONS</div>
-        <h1 class="title">Road damage intelligence, in seconds.</h1>
-        <p class="muted" style="margin:4px 0 0">Detect • Prioritise • Act</p>
+        <div class="eyebrow">ROAD DAMAGE DETECTION • RDD2022</div>
+        <h1 class="title">Road damage detection & risk assessment</h1>
+        <p class="muted" style="margin:4px 0 0">Upload • Detect • Assess</p>
       </div>
-      <div id="status" class="status">● RDD2022 AI Online</div>
+      <div id="status" class="status">● Model status: Online</div>
     </header>
 
     <!-- PAGE 1: DASHBOARD -->
     <section id="dash" class="page on">
       <div class="hero">
-        <div class="eyebrow">ROADSAFE COMMAND CENTRE</div>
-        <h2>Turn road imagery into maintenance decisions.</h2>
-        <p class="muted">A complete AI workflow for road-damage detection, bounding-box localisation, risk prioritisation and field reporting.</p>
+        <div class="eyebrow">ROAD DAMAGE OVERVIEW</div>
+        <h2>From road image to maintenance priority.</h2>
+        <p class="muted">Upload a road image, review detected damage, and get a 0–100 risk assessment.</p>
         <div class="actions">
-          <button class="btn primary" onclick="page('detect')">Start AI Detection →</button>
-          <button class="btn secondary" onclick="loadSampleAndRun(1)">Run Live Demo Inspection</button>
+          <button class="btn primary" onclick="page('detect')">Start Detection →</button>
+          <button class="btn secondary" onclick="loadSampleAndRun(1)">Run Sample Inspection</button>
           <button class="btn secondary" onclick="page('map')">View Risk Map</button>
         </div>
       </div>
 
       <div class="grid g4">
-        <div class="card"><div class="muted">Images analysed</div><div id="kpi-images" class="metric">1,289</div><div class="small muted">Live session + history</div></div>
-        <div class="card"><div class="muted">Damage detections</div><div id="kpi-detections" class="metric">3,754</div><div class="small muted">Potholes &amp; cracks</div></div>
-        <div class="card"><div class="muted">Priority cases</div><div id="kpi-priority" class="metric">149</div><div class="small muted">High &amp; Critical queue</div></div>
-        <div class="card"><div class="muted">AI confidence</div><div id="kpi-conf" class="metric">91.8%</div><div class="small muted">RDD2022 benchmark</div></div>
+        <div class="card"><div class="muted">Images processed</div><div id="kpi-images" class="metric">6</div><div class="small muted">Included test set</div></div>
+        <div class="card"><div class="muted">Detected issues</div><div id="kpi-detections" class="metric">7</div><div class="small muted">Potholes &amp; cracks</div></div>
+        <div class="card"><div class="muted">Highest risk</div><div id="kpi-priority" class="metric">98/100</div><div class="small muted">Maximum risk score</div></div>
+        <div class="card"><div class="muted">Model</div><div id="kpi-conf" class="metric" style="font-size:24px">RDD2022</div><div class="small muted">RDD2022 YOLO26m</div></div>
       </div>
 
       <div class="grid g2">
         <div class="card">
           <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
-            <h3 style="margin:0">Latest activity</h3>
+            <h3 style="margin:0">Recent sample results</h3>
             <button class="btn secondary" style="padding:6px 11px;font-size:12px" onclick="page('reports')">View All Reports →</button>
           </div>
           <div class="table-wrap" style="margin-top:10px">
@@ -174,11 +174,11 @@ html,body{margin:0;padding:0;width:100%;overflow-x:hidden;background:radial-grad
           </div>
         </div>
         <div class="card">
-          <h3 style="margin-top:0">What makes it different?</h3>
-          <p class="muted">Instead of stopping at bounding boxes, RoadSafe converts YOLO detections into an <b>explainable 0–100 risk score, severity tier, and field maintenance dispatch</b>.</p>
-          <div class="kpi"><span>Vision Engine</span><b>RDD2022 <code>best.pt</code> (YOLO26m)</b></div>
-          <div class="kpi"><span>Decision Layer</span><b>Weighted Risk Scoring (0–100)</b></div>
-          <div class="kpi"><span>Field Output</span><b>Annotated Image + TXT/CSV Report</b></div>
+          <h3 style="margin-top:0">Why RoadSafe?</h3>
+          <p class="muted">RoadSafe combines damage detection with a simple <b>0–100 risk score</b> so road segments can be reviewed and prioritised.</p>
+          <div class="kpi"><span>Detection model</span><b>RDD2022 <code>best.pt</code> (YOLO26m)</b></div>
+          <div class="kpi"><span>Risk calculation</span><b>Weighted Risk Scoring (0–100)</b></div>
+          <div class="kpi"><span>Report output</span><b>Annotated Image + TXT/CSV Report</b></div>
           <div class="actions" style="margin-top:14px">
             <button class="btn primary" onclick="page('result')">Open Latest Assessment →</button>
           </div>
@@ -244,7 +244,7 @@ html,body{margin:0;padding:0;width:100%;overflow-x:hidden;background:radial-grad
         </div>
 
         <div class="actions" style="margin-top:18px">
-          <button class="btn primary" onclick="analyze()">Run RDD2022 AI Detection</button>
+          <button class="btn primary" onclick="analyze()">Run Detection</button>
           <button class="btn secondary" onclick="demo()">Load Demo</button>
         </div>
       </div>
@@ -403,7 +403,7 @@ html,body{margin:0;padding:0;width:100%;overflow-x:hidden;background:radial-grad
       </div>
     </section>
 
-    <div class="footer">RoadSafe AI Pro • Tech Eximius 2.0 • RDD2022 Model Integration</div>
+    <div class="footer">RoadSafe AI • Tech Eximius 2.0 • RDD2022 Model Integration</div>
   </main>
 </div>
 
@@ -563,7 +563,7 @@ let showBoundingBoxes = true;
 let currentMapFilter = "all";
 let currentReportFilter = "all";
 let selectedZoneId = reportsList[1].analysis_id;
-let kpiStats = { images: 1289, detections: 3754, priority: 149 };
+let kpiStats = { images: SAMPLES.length, detections: SAMPLES.reduce((n, s) => n + s.detections.length, 0), priority: Math.max(...SAMPLES.map(s => computeRiskScore(s.detections, s.width, s.height))) };
 
 // ---------------------------------------------------------------------------
 // 2. NAVIGATION & TOAST
@@ -613,18 +613,18 @@ async function safeFetchJSON(url, options) {
 
 async function checkBackendStatus() {
   const statusEl = document.getElementById("status");
-  statusEl.textContent = "● Checking AI Engine…";
+  statusEl.textContent = "● Checking model…";
   for (const ep of ["/api/health", "/health"]) {
     try {
       const d = await safeFetchJSON(ep, { method: "GET" });
       if (d && d.status) {
-        statusEl.textContent = "● RDD2022 FastAPI Online";
+        statusEl.textContent = "● Backend online • RDD2022 model";
         toast("Connected to live FastAPI backend (" + (d.model || "best.pt") + ")");
         return;
       }
     } catch (_) {}
   }
-  statusEl.textContent = "● RDD2022 AI Ready (Edge + YOLO)";
+  statusEl.textContent = "● Model ready • RDD2022";
 }
 
 // ---------------------------------------------------------------------------
@@ -652,7 +652,7 @@ function previewUpload() {
     const img = document.getElementById("img");
     img.src = uploadedDataUrl;
     img.hidden = false;
-    toast("Image loaded: " + f.name + " — click Run RDD2022 AI Detection");
+    toast("Image loaded: " + f.name + " — click Run Detection");
   };
   reader.readAsDataURL(f);
 }
@@ -892,7 +892,7 @@ async function analyze() {
   reportsList.unshift(resultData);
   kpiStats.images += 1;
   kpiStats.detections += resultData.detections.length;
-  if (resultData.risk_score >= 60) kpiStats.priority += 1;
+  kpiStats.priority = Math.max(kpiStats.priority, resultData.risk_score);
 
   showBoundingBoxes = true;
   page("result");
@@ -1219,7 +1219,7 @@ function renderReports() {
 function renderDashboard() {
   document.getElementById("kpi-images").textContent = kpiStats.images.toLocaleString();
   document.getElementById("kpi-detections").textContent = kpiStats.detections.toLocaleString();
-  document.getElementById("kpi-priority").textContent = kpiStats.priority.toLocaleString();
+  document.getElementById("kpi-priority").textContent = kpiStats.priority + "/100";
 
   const tbody = document.getElementById("dash-activity-body");
   tbody.innerHTML = reportsList.slice(0, 4).map(r => {

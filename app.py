@@ -440,11 +440,8 @@ def build_onnx_file_from_pt(pt_path: str, onnx_path: str) -> str:
         feats = [outputs_by_idx[idx] for idx in det.state["f"]]
 
         scale_outs = []
-        # Use YOLO26's default one-to-many head. Ultralytics documents this
-        # path as the accuracy-oriented head; the one-to-one branch is the
-        # faster NMS-free path and can trade away a little recall.
-        cv2_list = dsub["cv2"]
-        cv3_list = dsub["cv3"]
+        cv2_list = dsub["one2one_cv2"]
+        cv3_list = dsub["one2one_cv3"]
         for s_idx, feat in enumerate(feats):
             b_mod = cv2_list.state["_modules"][str(s_idx)].state["_modules"]
             b0 = emit_fused_conv(b_mod["0"], feat, f"o2o_b{s_idx}_0")
@@ -500,8 +497,7 @@ def build_onnx_file_from_pt(pt_path: str, onnx_path: str) -> str:
 
 
 BASE_DIR = Path(__file__).resolve().parent
-DEFAULT_MODEL_URL = "https://github.com/ANSHIT175/Roadsafea-i/releases/download/v1.0.0/best.pt"
-MODEL_URL = os.environ.get("MODEL_URL", DEFAULT_MODEL_URL).strip()
+MODEL_URL = os.environ.get("MODEL_URL", "").strip()
 ONNX_CACHE_PATH = "/tmp/roadsafe_o2o.onnx"
 
 CANDIDATE_MODEL_PATHS = [
@@ -513,69 +509,34 @@ CANDIDATE_MODEL_PATHS = [
 ]
 
 
-def _is_valid_pt_checkpoint(path: Path) -> bool:
-    """Check that the downloaded file is the expected PyTorch ZIP checkpoint."""
-    try:
-        if not path.is_file() or path.stat().st_size <= 1_000_000:
-            return False
-        with zipfile.ZipFile(path, "r") as checkpoint:
-            names = set(checkpoint.namelist())
-            return "best/data.pkl" in names and any(n.startswith("best/data/") for n in names)
-    except (OSError, zipfile.BadZipFile, RuntimeError):
-        return False
-
-
 def ensure_model() -> str:
-    # Prefer a local model when running in VS Code. Vercel deployments exclude
-    # models/** and therefore fall through to the public GitHub Release asset.
     for path in CANDIDATE_MODEL_PATHS:
-        if _is_valid_pt_checkpoint(path):
+        if path.exists() and path.stat().st_size > 1_000_000:
             return str(path)
 
     if not MODEL_URL:
+        expected = ", ".join(str(p) for p in CANDIDATE_MODEL_PATHS[:3])
         raise FileNotFoundError(
-            "RoadSafe AI model weights are missing and MODEL_URL is not configured. "
-            "Set MODEL_URL to the public GitHub Release asset URL."
+            "RoadSafe AI model weights are missing. Include models/best.pt in the deployment. "
+            f"Checked: {expected}"
         )
 
     target = Path("/tmp/best.pt")
-    temp_target = Path("/tmp/best.pt.download")
     target.parent.mkdir(parents=True, exist_ok=True)
     req = urllib.request.Request(
         MODEL_URL,
-        headers={"User-Agent": "RoadSafeAI-Backend/2.4", "Accept": "application/octet-stream"},
+        headers={"User-Agent": "RoadSafeAI-Backend/2.3"},
     )
-
-    try:
-        with urllib.request.urlopen(req, timeout=180) as resp, open(temp_target, "wb") as f:
-            content_length = resp.headers.get("Content-Length")
-            expected_size = int(content_length) if content_length and content_length.isdigit() else None
-            downloaded = 0
-            while True:
-                chunk = resp.read(1024 * 1024)
-                if not chunk:
-                    break
-                f.write(chunk)
-                downloaded += len(chunk)
-            f.flush()
-            os.fsync(f.fileno())
-        if expected_size is not None and downloaded != expected_size:
-            raise RuntimeError(
-                f"Model download was incomplete ({downloaded} of {expected_size} bytes)."
-            )
-        if not _is_valid_pt_checkpoint(temp_target):
-            raise RuntimeError(
-                "GitHub Release download did not contain a valid best.pt checkpoint. "
-                "Check the Release asset name and URL."
-            )
-        os.replace(temp_target, target)
-        return str(target)
-    except Exception:
-        try:
-            temp_target.unlink(missing_ok=True)
-        except OSError:
-            pass
-        raise
+    with urllib.request.urlopen(req, timeout=120) as resp, open(target, "wb") as f:
+        while True:
+            chunk = resp.read(1024 * 1024)
+            if not chunk:
+                break
+            f.write(chunk)
+    if target.stat().st_size <= 1_000_000:
+        target.unlink(missing_ok=True)
+        raise RuntimeError("The downloaded model file is missing or too small to be a valid checkpoint.")
+    return str(target)
 
 
 _SESSION_LOCK = threading.Lock()
@@ -627,7 +588,7 @@ STRIDES = np.concatenate(_strides_list, axis=1)
 # {0: 'crack', 1: 'other corruption', 2: 'Pothole'}
 NAMES = {0: "crack", 1: "other corruption", 2: "Pothole"}
 
-app = FastAPI(title="RoadSafe AI Pro", version="2.3")
+app = FastAPI(title="RoadSafe AI Pro", version="2.2")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -652,21 +613,12 @@ def letterbox_image(im: Image.Image, new_shape: int = 640):
     return np.ascontiguousarray(arr), r, (left, top)
 
 
-def nms_boxes(
-    boxes: np.ndarray,
-    scores: np.ndarray,
-    iou_thresh: float = 0.45,
-    class_ids: np.ndarray | None = None,
-):
-    """Class-aware NMS; overlapping detections from different classes are retained."""
+def nms_boxes(boxes: np.ndarray, scores: np.ndarray, iou_thresh: float = 0.35):
+    """Greedy NMS with an extra containment check for nested duplicate boxes."""
     if len(boxes) == 0:
         return []
     boxes = np.asarray(boxes, dtype=np.float32)
     scores = np.asarray(scores, dtype=np.float32)
-    if class_ids is not None:
-        class_ids = np.asarray(class_ids)
-        if len(class_ids) != len(boxes):
-            raise ValueError("class_ids must have one value per box")
     x1, y1, x2, y2 = boxes[:, 0], boxes[:, 1], boxes[:, 2], boxes[:, 3]
     areas = np.maximum(0.0, x2 - x1) * np.maximum(0.0, y2 - y1)
     order = scores.argsort()[::-1]
@@ -686,15 +638,14 @@ def nms_boxes(
         iou = inter / union
         smaller_area = np.minimum(areas[i], areas[rest]) + 1e-6
         containment = inter / smaller_area
-        # Suppress duplicates within the same class, never cross-class overlaps.
-        same_class = np.ones(rest.shape, dtype=bool) if class_ids is None else class_ids[rest] == class_ids[i]
-        suppress = ((iou > iou_thresh) | (containment > 0.92)) & same_class
+        # The containment test catches a small duplicate box nested inside a wider box.
+        suppress = (iou > iou_thresh) | (containment > 0.88)
         order = rest[~suppress]
     return keep
 
 
 def is_foliage_or_sky(im_arr: np.ndarray, box) -> bool:
-    """Reject only boxes whose pixels are overwhelmingly foliage or bright sky."""
+    """Rejects false detections located on roadside green trees/grass or bright upper sky."""
     H, W = im_arr.shape[:2]
     x1, y1, x2, y2 = [int(round(v)) for v in box]
     x1, y1 = max(0, x1), max(0, y1)
@@ -702,16 +653,12 @@ def is_foliage_or_sky(im_arr: np.ndarray, box) -> bool:
     if x2 - x1 < 4 or y2 - y1 < 4:
         return True
     patch = im_arr[y1:y2, x1:x2].astype(np.float32)
-    r, g, b = patch[:, :, 0], patch[:, :, 1], patch[:, :, 2]
-
-    # Mean-colour checks can reject a real pothole merely because nearby grass
-    # falls inside its box. Require most of the actual pixels to be vegetation.
-    green_mask = (g > r * 1.12) & (g > b * 1.08) & (g > 70)
-    if float(green_mask.mean()) >= 0.72:
+    r, g, b = patch[:, :, 0].mean(), patch[:, :, 1].mean(), patch[:, :, 2].mean()
+    # Green vegetation / trees check
+    if g > r + 16 and g > b + 16:
         return True
-
-    sky_mask = (b > 175) & (r > 160) & (g > 160)
-    if (y1 + y2) * 0.5 < 0.22 * H and float(sky_mask.mean()) >= 0.78:
+    # Upper horizon sky check
+    if (y1 + y2) * 0.5 < 0.22 * H and b > 175 and r > 160 and g > 165:
         return True
     return False
 
@@ -768,7 +715,7 @@ def raw_infer_crop(sess: ort.InferenceSession, im: Image.Image, crop_box, min_co
     boxes_arr = np.array(boxes, dtype=np.float32)
     scores_arr = np.array(scores, dtype=np.float32)
     cids_arr = np.array(cids, dtype=np.int32)
-    keep = nms_boxes(boxes_arr, scores_arr, 0.45, cids_arr)
+    keep = nms_boxes(boxes_arr, scores_arr, 0.35)
     return [(NAMES[int(cids_arr[k])], float(scores_arr[k]), boxes_arr[k].tolist()) for k in keep]
 
 
@@ -797,11 +744,9 @@ def calculate_risk_score(detections, width: int, height: int) -> int:
 
     contributions.sort(reverse=True)
     primary = contributions[0]
-    # Each surviving post-NMS box represents a distinct candidate hazard.
-    # Count them with a bounded increment rather than adding a large fraction
-    # of every box's full severity (which made 4–5 boxes saturate near 100).
-    multi_hazard_bonus = min(20.0, max(0.0, (len(contributions) - 1) * 4.0))
-    return int(round(min(100.0, primary + multi_hazard_bonus)))
+    secondary = sum(0.18 * value for value in contributions[1:])
+    multi_hazard_bonus = min(8.0, max(0.0, (len(contributions) - 1) * 2.5))
+    return int(round(min(100.0, primary + secondary + multi_hazard_bonus)))
 
 
 def run_validated_inference(im: Image.Image) -> dict:
@@ -810,7 +755,7 @@ def run_validated_inference(im: Image.Image) -> dict:
     im_arr = np.asarray(im)
 
     # Conservative per-class confidence thresholds for best.pt
-    min_conf = {"Pothole": 0.40, "crack": 0.30, "other corruption": 0.55}
+    min_conf = {"Pothole": 0.38, "crack": 0.36, "other corruption": 0.45}
     candidates = raw_infer_crop(sess, im, (0, 0, W, H), min_conf)
 
     # Spatial & geometric validation
@@ -820,8 +765,9 @@ def run_validated_inference(im: Image.Image) -> dict:
         bw, bh = x2 - x1, y2 - y1
         area_ratio = (bw * bh) / float(W * H)
         yc = 0.5 * (y1 + y2)
-        # Keep smaller crack boxes; the confidence threshold and NMS handle noise.
-        if bw < 8 or bh < 8 or area_ratio < 0.0008:
+        if bw < 14 or bh < 14 or area_ratio < 0.0020:
+            continue
+        if yc < 0.18 * H and bh < 0.60 * H:
             continue
         if is_foliage_or_sky(im_arr, box):
             continue
@@ -858,8 +804,7 @@ def run_validated_inference(im: Image.Image) -> dict:
     if len(valid) > 1:
         b_arr = np.array([v[2] for v in valid], dtype=np.float32)
         s_arr = np.array([v[1] for v in valid], dtype=np.float32)
-        class_arr = np.array([list(NAMES.keys())[list(NAMES.values()).index(v[0])] for v in valid], dtype=np.int32)
-        keep = nms_boxes(b_arr, s_arr, 0.45, class_arr)
+        keep = nms_boxes(b_arr, s_arr, 0.35)
         valid = [valid[k] for k in keep]
 
     detections = []
@@ -879,9 +824,9 @@ def run_validated_inference(im: Image.Image) -> dict:
         return {
             "risk_score": 0,
             "severity": "Low",
-            "status_message": "The model returned no detections; manual review is recommended",
+            "status_message": "No significant road damage detected",
             "detections": [],
-            "recommendation": "The model returned no detections for this image. This is not proof that the road is damage-free. Review the image manually or capture a closer, well-lit view of the road surface.",
+            "recommendation": "No significant road damage detected. Road surface is in normal serviceable condition; continue routine patrol monitoring.",
         }
 
     risk = calculate_risk_score(detections, W, H)
@@ -920,7 +865,6 @@ def health():
         "status": "online" if model_available else "model_missing",
         "model": "RDD2022 best.pt (YOLO26m ONNXRuntime)",
         "model_available": model_available,
-        "model_source": "GitHub Release asset" if MODEL_URL else "local checkpoint",
         "model_loaded": _ORT_SESSION is not None,
         "trained_classes": NAMES,
         "clean_road_gate": "enabled",

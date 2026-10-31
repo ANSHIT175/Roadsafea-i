@@ -3,111 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=5">
-<title>RoadSafe AI Pro | Road Damage Intelligence</title>
+<title>RoadSafe AI | Road Damage Detection</title>
 <style>
-:root{
-  --bg:#060d17;
-  --panel:#0c1726;
-  --panel2:#101f32;
-  --line:#20364e;
-  --text:#edf5ff;
-  --muted:#8ea4bd;
-  --green:#50ddb0;
-  --blue:#5aa8ff;
-  --red:#ff687f;
-  --orange:#ff9f43;
-  --yellow:#ffd166;
-}
-*{box-sizing:border-box}
-html,body{margin:0;padding:0;width:100%;overflow-x:hidden;background:radial-gradient(circle at 25% 0,#122944 0,#060d17 42%);color:var(--text);font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
-.app-shell{display:flex;min-height:100vh;width:100%}
-.side{width:245px;position:fixed;inset:0 auto 0 0;background:#07101b;border-right:1px solid var(--line);padding:20px 13px;z-index:40;display:flex;flex-direction:column;justify-content:space-between}
-.brand{display:flex;gap:10px;align-items:center;font-size:20px;font-weight:900;padding:10px}
-.logo{width:35px;height:35px;border-radius:11px;background:linear-gradient(135deg,var(--green),var(--blue));display:grid;place-items:center;color:#061018;font-weight:900;flex-shrink:0}
-.nav{margin-top:20px;display:grid;gap:6px}
-.nav button{border:0;background:transparent;color:var(--muted);text-align:left;padding:12px 14px;border-radius:10px;cursor:pointer;font-size:14px;font-weight:600;display:flex;align-items:center;gap:10px;transition:all .18s ease}
-.nav button:hover,.nav button.on{background:#11243a;color:#fff;box-shadow:inset 3px 0 0 var(--green)}
-.side-foot{padding:12px;border-top:1px solid var(--line);font-size:11px;color:var(--muted);line-height:1.5}
-.main{margin-left:245px;width:calc(100% - 245px);max-width:100%;padding:26px 32px 60px}
-.top{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}
-.eyebrow{font-size:11px;color:var(--green);letter-spacing:.16em;font-weight:900;text-transform:uppercase}
-.title{font-size:clamp(22px,3.5vw,31px);margin:5px 0;line-height:1.2}
-.muted{color:var(--muted)}
-.status{padding:8px 14px;border-radius:999px;background:#0b241d;color:#72e7bc;border:1px solid #245342;font-size:12px;font-weight:700;display:inline-flex;align-items:center;gap:6px}
-.page{display:none;animation:fadeIn .2s ease}
-.page.on{display:block}
-@keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
-.hero,.card{background:linear-gradient(180deg,#0e1c2d,#0a1625);border:1px solid var(--line);border-radius:17px;padding:20px;margin-top:16px;max-width:100%}
-.hero{padding:24px}
-.hero h2{font-size:clamp(20px,2.8vw,27px);margin:6px 0}
-.grid{display:grid;gap:15px}
-.g4{grid-template-columns:repeat(4,minmax(0,1fr))}
-.g3{grid-template-columns:repeat(3,minmax(0,1fr))}
-.g2{grid-template-columns:1.25fr .85fr}
-.metric{font-size:28px;font-weight:900;margin:7px 0}
-.small{font-size:12px}
-.btn{border:0;border-radius:10px;padding:10px 15px;font-weight:800;font-size:13px;cursor:pointer;margin:4px 4px 4px 0;transition:transform .12s ease,opacity .15s ease;display:inline-flex;align-items:center;gap:6px}
-.btn:active{transform:scale(.97)}
-.primary{background:var(--green);color:#06130f}
-.secondary{background:#162d47;color:white;border:1px solid #2a4966}
-.secondary.active-filter{background:var(--green);color:#06130f;border-color:var(--green)}
-.actions{margin-top:15px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
-.drop{border:2px dashed #45657f;border-radius:15px;padding:28px 18px;text-align:center;cursor:pointer;display:block;transition:border-color .2s,background .2s;background:rgba(16,31,50,.45)}
-.drop:hover{border-color:var(--green);background:rgba(80,221,176,.05)}
-.drop input{display:none}
-.preview{display:block;max-width:100%;max-height:360px;margin:15px auto 0;border-radius:12px;border:1px solid var(--line)}
-.canvas-wrap{position:relative;width:100%;background:#050b13;border:1px solid var(--line);border-radius:14px;overflow:hidden;margin-top:12px;display:flex;justify-content:center;align-items:center;min-height:240px}
-.canvas-wrap canvas{display:block;max-width:100%;height:auto;border-radius:12px}
-.sample-strip{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;margin-top:14px}
-.sample-btn{border:1px solid var(--line);background:#0c1929;color:var(--text);border-radius:12px;padding:6px;cursor:pointer;text-align:left;transition:all .15s ease}
-.sample-btn:hover,.sample-btn.active{border-color:var(--green);background:#122840;transform:translateY(-2px)}
-.sample-btn img{width:100%;height:68px;object-fit:cover;border-radius:8px;display:block}
-.sample-btn span{display:block;font-size:11px;font-weight:700;margin-top:5px;line-height:1.25}
-.sample-btn small{display:block;font-size:10px;color:var(--muted);margin-top:2px}
-.kpi{display:flex;justify-content:space-between;align-items:center;padding:11px 0;border-bottom:1px solid var(--line);gap:10px;font-size:13px}
-.score{font-size:54px;font-weight:950;line-height:1}
-.score small{font-size:18px;color:var(--muted);font-weight:700}
-.tag{display:inline-block;padding:6px 10px;border-radius:999px;background:#321a23;color:#ff9aaa;margin:3px;font-size:12px;font-weight:700}
-.tag.high{background:#382015;color:#ffb074}
-.tag.medium{background:#352c13;color:#ffd76b}
-.tag.low{background:#102c24;color:#75e4ba}
-.table-wrap{width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
-.table{width:100%;border-collapse:collapse;min-width:460px}
-.table td,.table th{padding:11px 10px;border-bottom:1px solid var(--line);text-align:left;font-size:13px;vertical-align:middle}
-.table th{color:var(--muted);font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.04em}
-.table tr:hover td{background:rgba(255,255,255,.02)}
-.step-card{padding:12px;border-radius:12px;border:1px solid var(--line);background:#0b1624;transition:all .2s}
-.step-card.done{border-color:var(--green);background:rgba(80,221,176,.09)}
-.map{height:350px;border:1px solid var(--line);border-radius:14px;position:relative;overflow:hidden;background:linear-gradient(35deg,#0f2336 25%,#0a1828 25% 50%,#0f2336 50% 75%,#0a1828 75%);background-size:56px 56px}
-.road{position:absolute;width:140%;height:56px;left:-20%;top:46%;background:#24394e;border-top:2px dashed #537391;border-bottom:2px dashed #537391;transform:rotate(14deg)}
-.road-cross{position:absolute;width:130%;height:44px;left:-15%;top:38%;background:#1e3144;border-top:1px dashed #45627d;transform:rotate(-24deg)}
-.pin{position:absolute;width:26px;height:26px;border-radius:50% 50% 50% 0;background:var(--red);transform:rotate(-45deg);box-shadow:0 0 18px rgba(255,104,127,.85);cursor:pointer;border:2px solid #fff;transition:transform .18s ease,box-shadow .18s ease;z-index:5;padding:0}
-.pin:hover,.pin.selected{transform:rotate(-45deg) scale(1.28);z-index:10;box-shadow:0 0 26px #fff}
-.pin.med-pin{background:var(--yellow);box-shadow:0 0 16px rgba(255,209,102,.8)}
-.pin.low-pin{background:var(--green);box-shadow:0 0 16px rgba(80,221,176,.8)}
-.pin::after{content:"";position:absolute;background:#061018;width:8px;height:8px;border-radius:50%;left:7px;top:7px}
-.pin-label{position:absolute;transform:translate(-15%,-135%);background:rgba(6,13,23,.92);border:1px solid var(--line);color:#fff;padding:3px 7px;border-radius:6px;font-size:11px;font-weight:700;white-space:nowrap;pointer-events:none;z-index:6}
-.zone-card{background:#0b1726;border:1px solid var(--line);border-radius:13px;padding:14px;cursor:pointer;transition:all .15s}
-.zone-card:hover,.zone-card.active{border-color:var(--green);background:#102238}
-.search-input{background:#091320;border:1px solid var(--line);color:var(--text);padding:10px 13px;border-radius:10px;font-size:13px;min-width:220px;outline:none}
-.search-input:focus{border-color:var(--green)}
-.footer{text-align:center;color:#637890;font-size:12px;padding:30px 10px 10px}
-.toast{position:fixed;right:18px;bottom:18px;background:#122a42;border:1px solid var(--green);color:#fff;border-radius:12px;padding:12px 16px;display:none;z-index:100;font-size:13px;font-weight:700;box-shadow:0 10px 28px rgba(0,0,0,.45)}
-@media(max-width:900px){
-  .app-shell{flex-direction:column}
-  .side{position:sticky;top:0;width:100%;height:auto;border-right:0;border-bottom:1px solid var(--line);padding:10px 12px;flex-direction:column;gap:8px}
-  .brand{padding:2px 4px;font-size:17px}
-  .side-foot{display:none}
-  .nav{margin-top:0;display:flex;overflow-x:auto;gap:6px;padding-bottom:4px;-webkit-overflow-scrolling:touch}
-  .nav button{padding:8px 12px;font-size:12px;white-space:nowrap;flex-shrink:0}
-  .nav button.on{box-shadow:none;background:var(--green);color:#06130f}
-  .main{margin-left:0;width:100%;padding:16px 14px 50px}
-  .g4,.g3,.g2{grid-template-columns:1fr}
-  .sample-strip{grid-template-columns:repeat(2,minmax(0,1fr))}
-  .top{align-items:flex-start;flex-direction:column;gap:10px}
-  .hero{padding:18px}
-  .card{padding:16px}
-}
+:root{--bg:#0b1117;--panel:#111a23;--panel2:#16212c;--line:#2a3947;--text:#e8edf2;--muted:#94a2af;--green:#53d49b;--blue:#6ea8c8;--red:#e36d6d;--orange:#d9a15d;--yellow:#d8c15b}
+*{box-sizing:border-box}html,body{margin:0;padding:0;width:100%;overflow-x:hidden;background:var(--bg);color:var(--text);font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+.app-shell{display:flex;min-height:100vh;width:100%}.side{width:220px;position:fixed;inset:0 auto 0 0;background:#0e151c;border-right:1px solid var(--line);padding:18px 12px;z-index:40;display:flex;flex-direction:column;justify-content:space-between}.brand{display:flex;gap:10px;align-items:center;font-size:18px;font-weight:800;padding:10px}.logo{width:32px;height:32px;border-radius:7px;background:var(--green);display:grid;place-items:center;color:#07120e;font-weight:900;flex-shrink:0}.nav{margin-top:18px;display:grid;gap:3px}.nav button{border:0;background:transparent;color:#a9b5bf;text-align:left;padding:11px 12px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;display:flex;align-items:center;gap:9px}.nav button:hover,.nav button.on{background:#1a2732;color:#f7fafc;box-shadow:inset 2px 0 0 var(--green)}.side-foot{padding:12px 9px;border-top:1px solid var(--line);font-size:10px;color:var(--muted);line-height:1.55}.main{margin-left:220px;width:calc(100% - 220px);max-width:100%;padding:24px 30px 50px}.top{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;border-bottom:1px solid var(--line);padding-bottom:16px}.eyebrow{font-size:10px;color:#78cda8;letter-spacing:.11em;font-weight:800;text-transform:uppercase}.title{font-size:clamp(22px,3vw,29px);margin:5px 0;line-height:1.2;letter-spacing:-.02em}.muted{color:var(--muted)}.status{padding:6px 10px;border-radius:5px;background:#15231e;color:#83d5b1;border:1px solid #315243;font-size:11px;font-weight:700;display:inline-flex;align-items:center;gap:6px}.page{display:none;animation:fadeIn .12s ease}.page.on{display:block}@keyframes fadeIn{from{opacity:.5}to{opacity:1}}
+.hero,.card{background:var(--panel);border:1px solid var(--line);border-radius:7px;padding:18px;margin-top:14px;max-width:100%;box-shadow:none}.hero{padding:20px}.hero h2{font-size:clamp(20px,2.6vw,26px);margin:6px 0;letter-spacing:-.015em}.grid{display:grid;gap:12px}.g4{grid-template-columns:repeat(4,minmax(0,1fr))}.g3{grid-template-columns:repeat(3,minmax(0,1fr))}.g2{grid-template-columns:1.25fr .85fr}.metric{font-size:25px;font-weight:800;margin:7px 0}.small{font-size:11px}.btn{border:1px solid transparent;border-radius:6px;padding:9px 13px;font-weight:700;font-size:12px;cursor:pointer;margin:3px 4px 3px 0;transition:background .12s,border-color .12s;display:inline-flex;align-items:center;gap:6px}.btn:active{transform:none}.primary{background:var(--green);color:#07120e}.secondary{background:#18242f;color:#e9eef2;border-color:#334654}.secondary.active-filter{background:#24352e;color:#9de4c3;border-color:#4e806b}.actions{margin-top:13px;display:flex;flex-wrap:wrap;gap:5px;align-items:center}.drop{border:1px dashed #536574;border-radius:7px;padding:26px 18px;text-align:center;cursor:pointer;display:block;transition:border-color .15s,background .15s;background:#101a23}.drop:hover{border-color:var(--green);background:#132019}.drop input{display:none}.preview{display:block;max-width:100%;max-height:360px;margin:15px auto 0;border-radius:7px;border:1px solid var(--line)}.canvas-wrap{position:relative;width:100%;background:#080e14;border:1px solid var(--line);border-radius:7px;overflow:hidden;margin-top:12px;display:flex;justify-content:center;align-items:center;min-height:240px}.canvas-wrap canvas{display:block;max-width:100%;height:auto;border-radius:5px}.sample-strip{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;margin-top:12px}.sample-btn{border:1px solid var(--line);background:#121c25;color:var(--text);border-radius:6px;padding:5px;cursor:pointer;text-align:left}.sample-btn:hover,.sample-btn.active{border-color:#4c8b70;background:#17251f;transform:none}.sample-btn img{width:100%;height:64px;object-fit:cover;border-radius:4px;display:block}.sample-btn span{display:block;font-size:10px;font-weight:700;margin-top:5px;line-height:1.25}.sample-btn small{display:block;font-size:9px;color:var(--muted);margin-top:2px}.kpi{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--line);gap:10px;font-size:12px}.score{font-size:50px;font-weight:850;line-height:1}.score small{font-size:17px;color:var(--muted);font-weight:700}.tag{display:inline-block;padding:5px 8px;border-radius:5px;background:#382327;color:#f0a0a0;margin:3px;font-size:11px;font-weight:700}.tag.high{background:#382b1d;color:#e6b277}.tag.medium{background:#39351d;color:#e4d27b}.tag.low{background:#193027;color:#88d8b5}.table-wrap{width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}.table{width:100%;border-collapse:collapse;min-width:460px}.table td,.table th{padding:10px 9px;border-bottom:1px solid var(--line);text-align:left;font-size:12px;vertical-align:middle}.table th{color:#8e9ca8;font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:.06em}.table tr:hover td{background:#151f28}.step-card{padding:12px;border-radius:6px;border:1px solid var(--line);background:#101922}.step-card.done{border-color:#4b806a;background:#13231d}.map{height:350px;border:1px solid var(--line);border-radius:7px;position:relative;overflow:hidden;background:#111b24}.road{position:absolute;width:140%;height:56px;left:-20%;top:46%;background:#293744;border-top:2px dashed #667886;border-bottom:2px dashed #667886;transform:rotate(14deg)}.road-cross{position:absolute;width:130%;height:44px;left:-15%;top:38%;background:#25333f;border-top:1px dashed #627584;transform:rotate(-24deg)}.pin{position:absolute;width:23px;height:23px;border-radius:50%;background:var(--red);transform:translate(-50%,-50%);box-shadow:none;cursor:pointer;border:2px solid #fff;transition:transform .12s;z-index:5;padding:0}.pin:hover,.pin.selected{transform:translate(-50%,-50%) scale(1.15);z-index:10;box-shadow:0 0 0 4px rgba(255,255,255,.12)}.pin.med-pin{background:var(--yellow);box-shadow:none}.pin.low-pin{background:var(--green);box-shadow:none}.pin::after{content:"";position:absolute;background:#111a23;width:7px;height:7px;border-radius:50%;left:6px;top:6px}.pin-label{position:absolute;transform:translate(-15%,-135%);background:#0c141b;border:1px solid #3a4b59;color:#fff;padding:3px 6px;border-radius:4px;font-size:10px;font-weight:700;white-space:nowrap;pointer-events:none;z-index:6}.zone-card{background:#111a23;border:1px solid var(--line);border-radius:7px;padding:13px;cursor:pointer}.zone-card:hover,.zone-card.active{border-color:#4e806b;background:#15221d}.search-input{background:#0d151d;border:1px solid #344654;color:var(--text);padding:9px 12px;border-radius:6px;font-size:12px;min-width:220px;outline:none}.search-input:focus{border-color:#5b967d}.footer{text-align:center;color:#657684;font-size:11px;padding:26px 10px 8px}.toast{position:fixed;right:18px;bottom:18px;background:#17252f;border:1px solid #4d806b;color:#fff;border-radius:6px;padding:11px 14px;display:none;z-index:100;font-size:12px;font-weight:700;box-shadow:none}
+@media(max-width:900px){.app-shell{flex-direction:column}.side{position:sticky;top:0;width:100%;height:auto;border-right:0;border-bottom:1px solid var(--line);padding:9px 10px;flex-direction:column;gap:7px}.brand{padding:2px 4px;font-size:16px}.side-foot{display:none}.nav{margin-top:0;display:flex;overflow-x:auto;gap:4px;padding-bottom:3px;-webkit-overflow-scrolling:touch}.nav button{padding:8px 10px;font-size:11px;white-space:nowrap;flex-shrink:0}.nav button.on{box-shadow:none;background:var(--green);color:#06130f}.main{margin-left:0;width:100%;padding:15px 13px 45px}.g4,.g3,.g2{grid-template-columns:1fr}.sample-strip{grid-template-columns:repeat(2,minmax(0,1fr))}.top{align-items:flex-start;flex-direction:column;gap:8px}.hero{padding:16px}.card{padding:14px}}
 </style>
 </head>
 <body>
@@ -133,37 +35,37 @@ html,body{margin:0;padding:0;width:100%;overflow-x:hidden;background:radial-grad
   <main class="main">
     <header class="top">
       <div>
-        <div class="eyebrow">RDD2022 • COMPUTER VISION • ROAD OPERATIONS</div>
-        <h1 class="title">Road damage intelligence, in seconds.</h1>
-        <p class="muted" style="margin:4px 0 0">Detect • Prioritise • Act</p>
+        <div class="eyebrow">ROAD INSPECTION TOOL • RDD2022</div>
+        <h1 class="title">Road damage detection & risk assessment</h1>
+        <p class="muted" style="margin:4px 0 0">Upload • Detect • Assess</p>
       </div>
-      <div id="status" class="status">● RDD2022 AI Online</div>
+      <div id="status" class="status">● Model: RDD2022 ready</div>
     </header>
 
     <!-- PAGE 1: DASHBOARD -->
     <section id="dash" class="page on">
       <div class="hero">
-        <div class="eyebrow">ROADSAFE COMMAND CENTRE</div>
-        <h2>Turn road imagery into maintenance decisions.</h2>
-        <p class="muted">A complete AI workflow for road-damage detection, bounding-box localisation, risk prioritisation and field reporting.</p>
+        <div class="eyebrow">ROAD DAMAGE OVERVIEW</div>
+        <h2>Road image review for road maintenance teams.</h2>
+        <p class="muted">Upload a photo, inspect the marked damage, and review the calculated score.</p>
         <div class="actions">
-          <button class="btn primary" onclick="page('detect')">Start AI Detection →</button>
-          <button class="btn secondary" onclick="loadSampleAndRun(1)">Run Live Demo Inspection</button>
-          <button class="btn secondary" onclick="page('map')">View Risk Map</button>
+          <button class="btn primary" onclick="page('detect')">Start Inspection →</button>
+          <button class="btn secondary" onclick="loadSampleAndRun(1)">Try a Sample</button>
+          <button class="btn secondary" onclick="page('map')">Open Risk Map</button>
         </div>
       </div>
 
       <div class="grid g4">
-        <div class="card"><div class="muted">Images analysed</div><div id="kpi-images" class="metric">1,289</div><div class="small muted">Live session + history</div></div>
-        <div class="card"><div class="muted">Damage detections</div><div id="kpi-detections" class="metric">3,754</div><div class="small muted">Potholes &amp; cracks</div></div>
-        <div class="card"><div class="muted">Priority cases</div><div id="kpi-priority" class="metric">149</div><div class="small muted">High &amp; Critical queue</div></div>
-        <div class="card"><div class="muted">AI confidence</div><div id="kpi-conf" class="metric">91.8%</div><div class="small muted">RDD2022 benchmark</div></div>
+        <div class="card"><div class="muted">Images processed</div><div id="kpi-images" class="metric">6</div><div class="small muted">Included test set</div></div>
+        <div class="card"><div class="muted">Detected issues</div><div id="kpi-detections" class="metric">7</div><div class="small muted">Potholes &amp; cracks</div></div>
+        <div class="card"><div class="muted">Highest risk</div><div id="kpi-priority" class="metric">98/100</div><div class="small muted">Maximum risk score</div></div>
+        <div class="card"><div class="muted">Model</div><div id="kpi-conf" class="metric" style="font-size:24px">RDD2022</div><div class="small muted">RDD2022 YOLO26m</div></div>
       </div>
 
       <div class="grid g2">
         <div class="card">
           <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
-            <h3 style="margin:0">Latest activity</h3>
+            <h3 style="margin:0">Recent test results</h3>
             <button class="btn secondary" style="padding:6px 11px;font-size:12px" onclick="page('reports')">View All Reports →</button>
           </div>
           <div class="table-wrap" style="margin-top:10px">
@@ -174,11 +76,11 @@ html,body{margin:0;padding:0;width:100%;overflow-x:hidden;background:radial-grad
           </div>
         </div>
         <div class="card">
-          <h3 style="margin-top:0">What makes it different?</h3>
-          <p class="muted">Instead of stopping at bounding boxes, RoadSafe converts YOLO detections into an <b>explainable 0–100 risk score, severity tier, and field maintenance dispatch</b>.</p>
-          <div class="kpi"><span>Vision Engine</span><b>RDD2022 <code>best.pt</code> (YOLO26m)</b></div>
-          <div class="kpi"><span>Decision Layer</span><b>Weighted Risk Scoring (0–100)</b></div>
-          <div class="kpi"><span>Field Output</span><b>Annotated Image + TXT/CSV Report</b></div>
+          <h3 style="margin-top:0">Why this tool?</h3>
+          <p class="muted">The prototype keeps the workflow simple: detect visible damage, assign a score, and prepare a report for review.</p>
+          <div class="kpi"><span>Detection model</span><b>RDD2022 <code>best.pt</code> (YOLO26m)</b></div>
+          <div class="kpi"><span>Risk calculation</span><b>Weighted Risk Scoring (0–100)</b></div>
+          <div class="kpi"><span>Report output</span><b>Annotated Image + TXT/CSV Report</b></div>
           <div class="actions" style="margin-top:14px">
             <button class="btn primary" onclick="page('result')">Open Latest Assessment →</button>
           </div>
@@ -189,9 +91,9 @@ html,body{margin:0;padding:0;width:100%;overflow-x:hidden;background:radial-grad
     <!-- PAGE 2: AI DETECTION -->
     <section id="detect" class="page">
       <div class="hero">
-        <div class="eyebrow">LIVE AI INFERENCE</div>
-        <h2>Analyse a road image</h2>
-        <p class="muted">Upload any road photo from your device or tap one of the <b>5 real test road images</b> below to run instant pothole and crack detection.</p>
+        <div class="eyebrow">IMAGE CHECK</div>
+        <h2>Analyse road condition</h2>
+        <p class="muted">Upload any road photo from your device or tap one of the <b>bundled road test images</b> below to run instant pothole and crack detection.</p>
       </div>
 
       <div class="card">
@@ -244,7 +146,7 @@ html,body{margin:0;padding:0;width:100%;overflow-x:hidden;background:radial-grad
         </div>
 
         <div class="actions" style="margin-top:18px">
-          <button class="btn primary" onclick="analyze()">Run RDD2022 AI Detection</button>
+          <button class="btn primary" onclick="analyze()">Run Detection</button>
           <button class="btn secondary" onclick="demo()">Load Demo</button>
         </div>
       </div>
@@ -264,15 +166,15 @@ html,body{margin:0;padding:0;width:100%;overflow-x:hidden;background:radial-grad
     <!-- PAGE 3: RESULTS / ROAD SEGMENT ASSESSMENT -->
     <section id="result" class="page">
       <div class="hero">
-        <div class="eyebrow">ANALYSIS RESULT</div>
-        <h2>Road segment assessment</h2>
+        <div class="eyebrow">ASSESSMENT</div>
+        <h2>Assessment details</h2>
         <p id="result-subtitle" class="muted">Visual bounding-box localisation, risk intelligence, and maintenance dispatch.</p>
       </div>
 
       <div class="grid g2">
         <div class="card">
           <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
-            <h3 style="margin:0">Annotated Road Surface &amp; Detections</h3>
+            <h3 style="margin:0">Road image and detections</h3>
             <div>
               <button class="btn secondary" style="padding:6px 11px;font-size:12px" onclick="toggleBoxes()"><span id="box-toggle-label">Hide Boxes</span></button>
               <button class="btn secondary" style="padding:6px 11px;font-size:12px" onclick="downloadAnnotatedImage()">⬇ Save Annotated PNG</button>
@@ -290,14 +192,14 @@ html,body{margin:0;padding:0;width:100%;overflow-x:hidden;background:radial-grad
         </div>
 
         <div class="card">
-          <h3 style="margin-top:0">Risk Intelligence</h3>
+          <h3 style="margin-top:0">Risk summary</h3>
           <div id="risk"></div>
           <div style="margin-top:16px;padding:14px;border-radius:12px;background:#091320;border:1px solid var(--line)">
-            <div class="eyebrow" style="margin-bottom:6px">RECOMMENDED ENGINEERING ACTION</div>
+            <div class="eyebrow" style="margin-bottom:6px">SUGGESTED NEXT STEP</div>
             <p id="recommend" style="margin:0;font-size:14px;line-height:1.5;font-weight:600"></p>
           </div>
           <div style="margin-top:16px">
-            <h4 style="margin:0 0 8px;font-size:13px;color:var(--muted);text-transform:uppercase">Detected Bounding Boxes</h4>
+            <h4 style="margin:0 0 8px;font-size:13px;color:var(--muted);text-transform:uppercase">Detected regions</h4>
             <div class="table-wrap">
               <table class="table" style="min-width:320px">
                 <thead><tr><th>Damage Class</th><th>Conf</th><th>Box [x1, y1, x2, y2]</th></tr></thead>
@@ -312,9 +214,9 @@ html,body{margin:0;padding:0;width:100%;overflow-x:hidden;background:radial-grad
     <!-- PAGE 4: RISK MAP -->
     <section id="map" class="page">
       <div class="hero">
-        <div class="eyebrow">GEOSPATIAL VIEW</div>
-        <h2>Risk Map &amp; Zone Prioritisation</h2>
-        <p class="muted">Tap any pin on the corridor map or filter by severity tier to inspect field segments.</p>
+        <div class="eyebrow">SEGMENT VIEW</div>
+        <h2>Road segments and risk</h2>
+        <p class="muted">Select a segment below or use the filters to review priority areas.</p>
       </div>
 
       <div class="card">
@@ -332,6 +234,7 @@ html,body{margin:0;padding:0;width:100%;overflow-x:hidden;background:radial-grad
           <div class="road-cross"></div>
           <div id="map-pins"></div>
         </div>
+        <p class="small muted" style="margin:8px 2px 0">Prototype corridor view for demo data; pins represent inspection records, not live GPS positions.</p>
 
         <!-- Selected Zone Inspector Banner -->
         <div id="map-selected-banner" class="card" style="margin-top:14px;background:#091422;border-color:var(--green)"></div>
@@ -344,9 +247,9 @@ html,body{margin:0;padding:0;width:100%;overflow-x:hidden;background:radial-grad
     <!-- PAGE 5: INSPECTION REPORTS -->
     <section id="reports" class="page">
       <div class="hero">
-        <div class="eyebrow">MAINTENANCE WORKFLOW</div>
-        <h2>Inspection Reports</h2>
-        <p class="muted">Every AI detection is logged as an actionable maintenance record. Click <b>Open Assessment</b> on any record to view its annotated image and bounding boxes.</p>
+        <div class="eyebrow">REPORT LOG</div>
+        <h2>Inspection log</h2>
+        <p class="muted">Completed inspections, scores and exported reports are kept together here.</p>
       </div>
 
       <div class="card">
@@ -381,29 +284,29 @@ html,body{margin:0;padding:0;width:100%;overflow-x:hidden;background:radial-grad
       </div>
     </section>
 
-    <!-- PAGE 6: SYSTEM OVERVIEW -->
+    <!-- PAGE 6: HOW IT WORKS -->
     <section id="about" class="page">
       <div class="hero">
-        <div class="eyebrow">SYSTEM OVERVIEW</div>
-        <h2>How RoadSafe AI works</h2>
-        <p class="muted">An end-to-end computer vision and risk-scoring pipeline from raw road imagery to field maintenance dispatch.</p>
+        <div class="eyebrow">HOW IT WORKS</div>
+        <h2>How the inspection works</h2>
+        <p class="muted">The prototype takes a road image, marks visible damage, calculates a risk score, and prepares an inspection record.</p>
       </div>
       <div class="grid g3">
-        <div class="card"><h3>01 • Perception</h3><p class="muted">The trained RDD2022 YOLO26m model (<code>best.pt</code>) analyses 640×640 letterboxed road imagery and outputs bounding boxes, class IDs, and confidence scores.</p></div>
-        <div class="card"><h3>02 • Risk Scoring</h3><p class="muted">Each detection is weighted by structural hazard (Pothole: 38, Alligator Crack: 30, Road Crack: 25, Longitudinal/Transverse: 22, Surface Corruption: 20) plus density bonus (up to +25) on a 0–100 scale.</p></div>
-        <div class="card"><h3>03 • Field Action</h3><p class="muted">Scores map deterministically to Critical (≥80), High (60–79), Medium (35–59), or Low (&lt;35) maintenance SLAs with downloadable field reports.</p></div>
+        <div class="card"><h3>01 • Image detection</h3><p class="muted">The trained RDD2022 YOLO26m model (<code>best.pt</code>) analyses 640×640 letterboxed road imagery and outputs bounding boxes, class IDs, and confidence scores.</p></div>
+        <div class="card"><h3>02 • Risk score</h3><p class="muted">Each detection is weighted by structural hazard (Pothole: 38, Alligator Crack: 30, Road Crack: 25, Longitudinal/Transverse: 22, Surface Corruption: 20) plus density bonus (up to +25) on a 0–100 scale.</p></div>
+        <div class="card"><h3>03 • Suggested action</h3><p class="muted">Scores map deterministically to Critical (≥80), High (60–79), Medium (35–59), or Low (&lt;35) maintenance SLAs with downloadable field reports.</p></div>
       </div>
       <div class="card">
-        <h3 style="margin-top:0">Architecture &amp; Deployment</h3>
+        <h3 style="margin-top:0">Technical setup</h3>
         <p class="muted">Browser / Vercel Edge UI → FastAPI (<code>/analyze</code> &amp; <code>/health</code>) + Client Vision Fallback → RDD2022 <b>best.pt</b> → Detection JSON &amp; Bounding Box Canvas → Risk Map &amp; Reports</p>
         <div class="actions">
-          <button class="btn primary" onclick="checkBackendStatus()">↻ Verify AI Engine Status</button>
-          <button class="btn secondary" onclick="page('detect')">Go to AI Detection →</button>
+          <button class="btn primary" onclick="checkBackendStatus()">↻ Check model status</button>
+          <button class="btn secondary" onclick="page('detect')">Open image check →</button>
         </div>
       </div>
     </section>
 
-    <div class="footer">RoadSafe AI Pro • Tech Eximius 2.0 • RDD2022 Model Integration</div>
+    <div class="footer">RoadSafe AI • Tech Eximius 2.0 • Prototype</div>
   </main>
 </div>
 
@@ -563,7 +466,7 @@ let showBoundingBoxes = true;
 let currentMapFilter = "all";
 let currentReportFilter = "all";
 let selectedZoneId = reportsList[1].analysis_id;
-let kpiStats = { images: 1289, detections: 3754, priority: 149 };
+let kpiStats = { images: SAMPLES.length, detections: SAMPLES.reduce((n, s) => n + s.detections.length, 0), priority: Math.max(...SAMPLES.map(s => computeRiskScore(s.detections, s.width, s.height))) };
 
 // ---------------------------------------------------------------------------
 // 2. NAVIGATION & TOAST
@@ -613,18 +516,18 @@ async function safeFetchJSON(url, options) {
 
 async function checkBackendStatus() {
   const statusEl = document.getElementById("status");
-  statusEl.textContent = "● Checking AI Engine…";
+  statusEl.textContent = "● Checking model…";
   for (const ep of ["/api/health", "/health"]) {
     try {
       const d = await safeFetchJSON(ep, { method: "GET" });
       if (d && d.status) {
-        statusEl.textContent = "● RDD2022 FastAPI Online";
+        statusEl.textContent = "● Backend online • RDD2022 model";
         toast("Connected to live FastAPI backend (" + (d.model || "best.pt") + ")");
         return;
       }
     } catch (_) {}
   }
-  statusEl.textContent = "● RDD2022 AI Ready (Edge + YOLO)";
+  statusEl.textContent = "● Model ready • RDD2022";
 }
 
 // ---------------------------------------------------------------------------
@@ -652,7 +555,7 @@ function previewUpload() {
     const img = document.getElementById("img");
     img.src = uploadedDataUrl;
     img.hidden = false;
-    toast("Image loaded: " + f.name + " — click Run RDD2022 AI Detection");
+    toast("Image loaded: " + f.name + " — click Run Detection");
   };
   reader.readAsDataURL(f);
 }
@@ -892,7 +795,7 @@ async function analyze() {
   reportsList.unshift(resultData);
   kpiStats.images += 1;
   kpiStats.detections += resultData.detections.length;
-  if (resultData.risk_score >= 60) kpiStats.priority += 1;
+  kpiStats.priority = Math.max(kpiStats.priority, resultData.risk_score);
 
   showBoundingBoxes = true;
   page("result");
@@ -1219,7 +1122,7 @@ function renderReports() {
 function renderDashboard() {
   document.getElementById("kpi-images").textContent = kpiStats.images.toLocaleString();
   document.getElementById("kpi-detections").textContent = kpiStats.detections.toLocaleString();
-  document.getElementById("kpi-priority").textContent = kpiStats.priority.toLocaleString();
+  document.getElementById("kpi-priority").textContent = kpiStats.priority + "/100";
 
   const tbody = document.getElementById("dash-activity-body");
   tbody.innerHTML = reportsList.slice(0, 4).map(r => {

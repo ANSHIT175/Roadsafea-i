@@ -431,7 +431,7 @@ const RECOMMENDATIONS = {
   "Critical": "Immediate intervention required. Isolate and repair the affected road hazard segment.",
   "High": "Priority field maintenance recommended within 24–48 hours to prevent structural expansion.",
   "Medium": "Moderate surface distress detected. Schedule sealing or patching in the next maintenance cycle.",
-  "Low": "No significant road damage detected. Road surface is in normal serviceable condition; continue routine patrol monitoring."
+  "Low": "Low-severity road distress was detected. Monitor the affected segment and schedule routine maintenance."
 };
 
 const SAMPLES = [
@@ -790,7 +790,7 @@ async function analyze() {
   showBoundingBoxes = true;
   page("result");
   if (resultData.detections.length === 0) {
-    toast("Model detected no road damage — Risk 0/100 (Low)");
+    toast("No model detections — manual review recommended");
   } else {
     toast("Live AI analysis complete: Risk " + resultData.risk_score + "/100 (" + resultData.severity + ")");
   }
@@ -835,15 +835,15 @@ function drawAnnotatedCanvas(item) {
     const sy = dispH / natH;
 
     if (!item.detections || item.detections.length === 0) {
-      const msg = "✓ No significant road damage detected • Low / Safe (0/100)";
+      const msg = "No model detections • Manual review recommended (0/100)";
       ctx.font = "bold 13px Inter, system-ui, sans-serif";
       const tw = Math.min(dispW - 24, ctx.measureText(msg).width + 24);
-      ctx.fillStyle = "rgba(6, 22, 18, 0.88)";
+      ctx.fillStyle = "rgba(28, 23, 12, 0.92)";
       ctx.fillRect(12, 12, tw, 32);
-      ctx.strokeStyle = "#50ddb0";
+      ctx.strokeStyle = "#ffbf69";
       ctx.lineWidth = 2;
       ctx.strokeRect(12, 12, tw, 32);
-      ctx.fillStyle = "#50ddb0";
+      ctx.fillStyle = "#ffbf69";
       ctx.fillText(msg, 24, 33);
       return;
     }
@@ -925,17 +925,21 @@ function renderResultView(item) {
       return `<span class="tag ${clsTag}">#${i + 1} ${x.class} • ${x.confidence}%</span>`;
     }).join("");
   } else {
-    detEl.innerHTML = `<span class="tag low">✓ No significant road damage detected (Low / Safe)</span>`;
+    detEl.innerHTML = `<span class="tag medium">No model detections • Manual review recommended</span>`;
   }
 
-  const sevColor = item.severity === "Critical" ? "var(--red)" :
+  const hasDetections = Array.isArray(item.detections) && item.detections.length > 0;
+  const sevColor = !hasDetections ? "var(--yellow)" :
+                   item.severity === "Critical" ? "var(--red)" :
                    item.severity === "High" ? "var(--orange)" :
                    item.severity === "Medium" ? "var(--yellow)" : "var(--green)";
+  const riskLabel = hasDetections ? item.severity + " Risk" : "Unverified";
+  const riskTagClass = hasDetections ? (item.risk_score >= 80 ? "" : item.risk_score >= 60 ? "high" : item.risk_score >= 35 ? "medium" : "low") : "medium";
 
   document.getElementById("risk").innerHTML = `
     <div style="display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:10px">
       <div class="score" style="color:${sevColor}">${item.risk_score}<small>/100</small></div>
-      <span class="tag ${item.risk_score >= 80 ? '' : item.risk_score >= 60 ? 'high' : item.risk_score >= 35 ? 'medium' : 'low'}" style="font-size:14px;padding:7px 14px">${item.severity} Risk</span>
+      <span class="tag ${riskTagClass}" style="font-size:14px;padding:7px 14px">${riskLabel}</span>
     </div>
     <div style="width:100%;height:10px;background:#091320;border-radius:99px;margin:12px 0;overflow:hidden;border:1px solid var(--line)">
       <div style="width:${item.risk_score}%;height:100%;background:${sevColor};border-radius:99px"></div>
@@ -951,7 +955,7 @@ function renderResultView(item) {
 
   const tbody = document.getElementById("det-table-body");
   if (!item.detections || item.detections.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="3" style="color:var(--green);font-weight:700">✓ No significant road damage detected — Clean-Road Gate passed (0 false positives).</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="3" style="color:var(--yellow);font-weight:700">No detections returned by the model. This does not confirm a damage-free road; manual review is recommended.</td></tr>`;
   } else {
     tbody.innerHTML = (item.detections || []).map((d, idx) => `
       <tr>
@@ -1009,7 +1013,7 @@ function renderMap() {
   // Render pins on the map
   const pinsContainer = document.getElementById("map-pins");
   pinsContainer.innerHTML = filtered.map(r => {
-    const pinClass = r.risk_score >= 60 ? "" : r.risk_score >= 35 ? "med-pin" : "low-pin";
+    const pinClass = !r.detections.length ? "med-pin" : r.risk_score >= 60 ? "" : r.risk_score >= 35 ? "med-pin" : "low-pin";
     const isSel = r.analysis_id === selectedZoneId ? "selected" : "";
     const left = r.latLng ? r.latLng.left : 50;
     const top = r.latLng ? r.latLng.top : 45;
@@ -1024,7 +1028,7 @@ function renderMap() {
   const selItem = reportsList.find(r => r.analysis_id === selectedZoneId) || filtered[0];
   const banner = document.getElementById("map-selected-banner");
   if (selItem) {
-    const primaryDmg = selItem.detections.length ? selItem.detections.map(d => d.class + " (" + d.confidence + "%)").join(", ") : "No significant road damage detected";
+    const primaryDmg = selItem.detections.length ? selItem.detections.map(d => d.class + " (" + d.confidence + "%)").join(", ") : "No model detections • manual review needed";
     banner.innerHTML = `
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
         <div>
@@ -1035,8 +1039,8 @@ function renderMap() {
         </div>
         <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
           <div style="text-align:right">
-            <div style="font-size:26px;font-weight:900;color:var(--green)">${selItem.risk_score}<small style="font-size:13px;color:var(--muted)">/100</small></div>
-            <div class="small muted">${selItem.severity} Priority</div>
+            <div style="font-size:26px;font-weight:900;color:${selItem.detections.length ? "var(--green)" : "var(--yellow)"}">${selItem.risk_score}<small style="font-size:13px;color:var(--muted)">/100</small></div>
+            <div class="small muted">${selItem.detections.length ? selItem.severity + " Priority" : "Unverified • review needed"}</div>
           </div>
           <button class="btn primary" onclick="openReportInResults('${selItem.analysis_id}')">Open Full Assessment →</button>
         </div>
@@ -1048,15 +1052,16 @@ function renderMap() {
   const grid = document.getElementById("map-zone-grid");
   grid.innerHTML = filtered.map(r => {
     const isSel = r.analysis_id === selectedZoneId ? "active" : "";
-    const tagCls = r.risk_score >= 80 ? "" : r.risk_score >= 60 ? "high" : r.risk_score >= 35 ? "medium" : "low";
+    const tagCls = !r.detections.length ? "medium" : r.risk_score >= 80 ? "" : r.risk_score >= 60 ? "high" : r.risk_score >= 35 ? "medium" : "low";
+    const zoneRiskLabel = r.detections.length ? r.severity : "Unverified";
     return `
       <div class="zone-card ${isSel}" onclick="selectMapZone('${r.analysis_id}')">
         <div style="display:flex;justify-content:space-between;align-items:center">
           <b>${r.analysis_id}</b>
-          <span class="tag ${tagCls}">Risk ${r.risk_score} • ${r.severity}</span>
+          <span class="tag ${tagCls}">${r.detections.length ? "Risk " + r.risk_score : "Unverified"} • ${zoneRiskLabel}</span>
         </div>
         <div style="font-weight:700;margin:6px 0 4px">${r.location}</div>
-        <div class="small muted">${r.detections.length ? r.detections.length + " detection(s): " + r.detections.map(d => d.class).join(", ") : "0 detections • No significant road damage detected"}</div>
+        <div class="small muted">${r.detections.length ? r.detections.length + " detection(s): " + r.detections.map(d => d.class).join(", ") : "0 model detections • Manual review recommended"}</div>
         <div style="margin-top:10px;display:flex;justify-content:space-between;align-items:center">
           <span class="small muted">${r.timestamp}</span>
           <button class="btn secondary" style="padding:6px 10px;font-size:11px;margin:0" onclick="event.stopPropagation();openReportInResults('${r.analysis_id}')">Inspect →</button>
@@ -1097,9 +1102,9 @@ function renderReports() {
         <td><b>${r.analysis_id}</b></td>
         <td class="small muted">${r.timestamp}</td>
         <td><b>${r.location}</b></td>
-        <td>${r.detections.length ? r.detections.map(d => `<span class="tag ${tagCls}">${d.class} (${d.confidence}%)</span>`).join("") : `<span class="tag low">No significant road damage detected</span>`}</td>
+        <td>${r.detections.length ? r.detections.map(d => `<span class="tag ${tagCls}">${d.class} (${d.confidence}%)</span>`).join("") : `<span class="tag medium">No model detections • review recommended</span>`}</td>
         <td><b style="font-size:15px">${r.risk_score}</b><span class="small muted">/100</span></td>
-        <td><span class="tag ${tagCls}">${r.severity}</span></td>
+        <td><span class="tag ${r.detections.length ? tagCls : "medium"}">${r.detections.length ? r.severity : "Unverified"}</span></td>
         <td>
           <button class="btn primary" style="padding:6px 11px;font-size:12px" onclick="openReportInResults('${r.analysis_id}')">Open</button>
           <button class="btn secondary" style="padding:6px 10px;font-size:12px" onclick="exportSingleReport('${r.analysis_id}')">⬇ TXT</button>
@@ -1123,7 +1128,7 @@ function renderDashboard() {
         <td><b>${r.analysis_id}</b></td>
         <td>${primary} <span class="small muted">(${r.detections.length})</span></td>
         <td><b>${r.risk_score}</b>/100</td>
-        <td><span class="tag ${tagCls}">${r.severity}</span></td>
+        <td><span class="tag ${r.detections.length ? tagCls : "medium"}">${r.detections.length ? r.severity : "Unverified"}</span></td>
         <td><button class="btn secondary" style="padding:5px 10px;font-size:11px;margin:0" onclick="openReportInResults('${r.analysis_id}')">Open →</button></td>
       </tr>
     `;

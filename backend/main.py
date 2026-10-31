@@ -440,8 +440,11 @@ def build_onnx_file_from_pt(pt_path: str, onnx_path: str) -> str:
         feats = [outputs_by_idx[idx] for idx in det.state["f"]]
 
         scale_outs = []
-        cv2_list = dsub["one2one_cv2"]
-        cv3_list = dsub["one2one_cv3"]
+        # Use YOLO26's default one-to-many head. Ultralytics documents this
+        # path as the accuracy-oriented head; the one-to-one branch is the
+        # faster NMS-free path and can trade away a little recall.
+        cv2_list = dsub["cv2"]
+        cv3_list = dsub["cv3"]
         for s_idx, feat in enumerate(feats):
             b_mod = cv2_list.state["_modules"][str(s_idx)].state["_modules"]
             b0 = emit_fused_conv(b_mod["0"], feat, f"o2o_b{s_idx}_0")
@@ -588,7 +591,7 @@ STRIDES = np.concatenate(_strides_list, axis=1)
 # {0: 'crack', 1: 'other corruption', 2: 'Pothole'}
 NAMES = {0: "crack", 1: "other corruption", 2: "Pothole"}
 
-app = FastAPI(title="RoadSafe AI Pro", version="2.2")
+app = FastAPI(title="RoadSafe AI Pro", version="2.3")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -613,12 +616,21 @@ def letterbox_image(im: Image.Image, new_shape: int = 640):
     return np.ascontiguousarray(arr), r, (left, top)
 
 
-def nms_boxes(boxes: np.ndarray, scores: np.ndarray, iou_thresh: float = 0.35):
-    """Greedy NMS with an extra containment check for nested duplicate boxes."""
+def nms_boxes(
+    boxes: np.ndarray,
+    scores: np.ndarray,
+    iou_thresh: float = 0.45,
+    class_ids: np.ndarray | None = None,
+):
+    """Class-aware NMS; overlapping detections from different classes are retained."""
     if len(boxes) == 0:
         return []
     boxes = np.asarray(boxes, dtype=np.float32)
     scores = np.asarray(scores, dtype=np.float32)
+    if class_ids is not None:
+        class_ids = np.asarray(class_ids)
+        if len(class_ids) != len(boxes):
+            raise ValueError("class_ids must have one value per box")
     x1, y1, x2, y2 = boxes[:, 0], boxes[:, 1], boxes[:, 2], boxes[:, 3]
     areas = np.maximum(0.0, x2 - x1) * np.maximum(0.0, y2 - y1)
     order = scores.argsort()[::-1]
@@ -638,14 +650,15 @@ def nms_boxes(boxes: np.ndarray, scores: np.ndarray, iou_thresh: float = 0.35):
         iou = inter / union
         smaller_area = np.minimum(areas[i], areas[rest]) + 1e-6
         containment = inter / smaller_area
-        # The containment test catches a small duplicate box nested inside a wider box.
-        suppress = (iou > iou_thresh) | (containment > 0.88)
+        # Suppress duplicates within the same class, never cross-class overlaps.
+        same_class = np.ones(rest.shape, dtype=bool) if class_ids is None else class_ids[rest] == class_ids[i]
+        suppress = ((iou > iou_thresh) | (containment > 0.92)) & same_class
         order = rest[~suppress]
     return keep
 
 
 def is_foliage_or_sky(im_arr: np.ndarray, box) -> bool:
-    """Rejects false detections located on roadside green trees/grass or bright upper sky."""
+    """Reject only boxes whose pixels are overwhelmingly foliage or bright sky."""
     H, W = im_arr.shape[:2]
     x1, y1, x2, y2 = [int(round(v)) for v in box]
     x1, y1 = max(0, x1), max(0, y1)
@@ -653,12 +666,16 @@ def is_foliage_or_sky(im_arr: np.ndarray, box) -> bool:
     if x2 - x1 < 4 or y2 - y1 < 4:
         return True
     patch = im_arr[y1:y2, x1:x2].astype(np.float32)
-    r, g, b = patch[:, :, 0].mean(), patch[:, :, 1].mean(), patch[:, :, 2].mean()
-    # Green vegetation / trees check
-    if g > r + 16 and g > b + 16:
+    r, g, b = patch[:, :, 0], patch[:, :, 1], patch[:, :, 2]
+
+    # Mean-colour checks can reject a real pothole merely because nearby grass
+    # falls inside its box. Require most of the actual pixels to be vegetation.
+    green_mask = (g > r * 1.12) & (g > b * 1.08) & (g > 70)
+    if float(green_mask.mean()) >= 0.72:
         return True
-    # Upper horizon sky check
-    if (y1 + y2) * 0.5 < 0.22 * H and b > 175 and r > 160 and g > 165:
+
+    sky_mask = (b > 175) & (r > 160) & (g > 160)
+    if (y1 + y2) * 0.5 < 0.22 * H and float(sky_mask.mean()) >= 0.78:
         return True
     return False
 
@@ -715,7 +732,7 @@ def raw_infer_crop(sess: ort.InferenceSession, im: Image.Image, crop_box, min_co
     boxes_arr = np.array(boxes, dtype=np.float32)
     scores_arr = np.array(scores, dtype=np.float32)
     cids_arr = np.array(cids, dtype=np.int32)
-    keep = nms_boxes(boxes_arr, scores_arr, 0.35)
+    keep = nms_boxes(boxes_arr, scores_arr, 0.45, cids_arr)
     return [(NAMES[int(cids_arr[k])], float(scores_arr[k]), boxes_arr[k].tolist()) for k in keep]
 
 
@@ -744,9 +761,11 @@ def calculate_risk_score(detections, width: int, height: int) -> int:
 
     contributions.sort(reverse=True)
     primary = contributions[0]
-    secondary = sum(0.18 * value for value in contributions[1:])
-    multi_hazard_bonus = min(8.0, max(0.0, (len(contributions) - 1) * 2.5))
-    return int(round(min(100.0, primary + secondary + multi_hazard_bonus)))
+    # Each surviving post-NMS box represents a distinct candidate hazard.
+    # Count them with a bounded increment rather than adding a large fraction
+    # of every box's full severity (which made 4–5 boxes saturate near 100).
+    multi_hazard_bonus = min(20.0, max(0.0, (len(contributions) - 1) * 4.0))
+    return int(round(min(100.0, primary + multi_hazard_bonus)))
 
 
 def run_validated_inference(im: Image.Image) -> dict:
@@ -755,7 +774,7 @@ def run_validated_inference(im: Image.Image) -> dict:
     im_arr = np.asarray(im)
 
     # Conservative per-class confidence thresholds for best.pt
-    min_conf = {"Pothole": 0.38, "crack": 0.36, "other corruption": 0.45}
+    min_conf = {"Pothole": 0.40, "crack": 0.30, "other corruption": 0.55}
     candidates = raw_infer_crop(sess, im, (0, 0, W, H), min_conf)
 
     # Spatial & geometric validation
@@ -765,9 +784,8 @@ def run_validated_inference(im: Image.Image) -> dict:
         bw, bh = x2 - x1, y2 - y1
         area_ratio = (bw * bh) / float(W * H)
         yc = 0.5 * (y1 + y2)
-        if bw < 14 or bh < 14 or area_ratio < 0.0020:
-            continue
-        if yc < 0.18 * H and bh < 0.60 * H:
+        # Keep smaller crack boxes; the confidence threshold and NMS handle noise.
+        if bw < 8 or bh < 8 or area_ratio < 0.0008:
             continue
         if is_foliage_or_sky(im_arr, box):
             continue
@@ -804,7 +822,8 @@ def run_validated_inference(im: Image.Image) -> dict:
     if len(valid) > 1:
         b_arr = np.array([v[2] for v in valid], dtype=np.float32)
         s_arr = np.array([v[1] for v in valid], dtype=np.float32)
-        keep = nms_boxes(b_arr, s_arr, 0.35)
+        class_arr = np.array([list(NAMES.keys())[list(NAMES.values()).index(v[0])] for v in valid], dtype=np.int32)
+        keep = nms_boxes(b_arr, s_arr, 0.45, class_arr)
         valid = [valid[k] for k in keep]
 
     detections = []
@@ -824,9 +843,9 @@ def run_validated_inference(im: Image.Image) -> dict:
         return {
             "risk_score": 0,
             "severity": "Low",
-            "status_message": "No significant road damage detected",
+            "status_message": "The model returned no detections; manual review is recommended",
             "detections": [],
-            "recommendation": "No significant road damage detected. Road surface is in normal serviceable condition; continue routine patrol monitoring.",
+            "recommendation": "The model returned no detections for this image. This is not proof that the road is damage-free. Review the image manually or capture a closer, well-lit view of the road surface.",
         }
 
     risk = calculate_risk_score(detections, W, H)
